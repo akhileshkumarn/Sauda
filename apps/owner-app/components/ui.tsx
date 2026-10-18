@@ -89,16 +89,72 @@ export function Card({ title, subtitle, action, tone, className = '', children, 
   );
 }
 
-export function PageHead({ eyebrow, title, children, action }: { eyebrow?: string; title: ReactNode; children?: ReactNode; action?: ReactNode }) {
+export type Crumb = { href?: string; label: ReactNode };
+/** Breadcrumb for deep pages. The last crumb is the current page (no link). */
+export function Crumbs({ items }: { items: Crumb[] }) {
   return (
-    <div className="row between top wrap">
+    <nav aria-label="Breadcrumb">
+      <ol className="crumbs">
+        {items.map((c, i) => {
+          const last = i === items.length - 1;
+          return <li key={i}>{c.href && !last ? <Link href={c.href}>{c.label}</Link> : <span aria-current={last ? 'page' : undefined}>{c.label}</span>}</li>;
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * Page header: optional breadcrumb, a display-face title, a one-line description and actions.
+ * `children` and `description` are the same slot (children kept for older call sites).
+ */
+export function PageHead({ eyebrow, title, children, description, action, crumbs, size }:
+  { eyebrow?: string; title: ReactNode; children?: ReactNode; description?: ReactNode; action?: ReactNode; crumbs?: Crumb[]; size?: 'display' }) {
+  const desc = description ?? children;
+  return (
+    <header className="ph">
       <div className="page-head grow">
+        {crumbs && crumbs.length > 0 && <Crumbs items={crumbs} />}
         {eyebrow && <span className="eyebrow">{eyebrow}</span>}
-        <h1>{title}</h1>
-        {children && <p>{children}</p>}
+        <h1 className={size === 'display' ? 'display' : undefined} style={size === 'display' ? { fontSize: 'var(--fs-display)' } : undefined}>{title}</h1>
+        {desc && <p>{desc}</p>}
       </div>
-      {action}
+      {action && <div className="ph-actions">{action}</div>}
+    </header>
+  );
+}
+
+/** A labelled figure: label, value (usually <Money>), and the basis it is computed from. */
+export function Stat({ label, value, basis, tone, size }: { label: ReactNode; value: ReactNode; basis?: ReactNode; tone?: 'money' | 'bad' | 'warn'; size?: 'lg' }) {
+  return (
+    <div className={`stat ${tone ? `stat-${tone}` : ''} ${size || ''}`}>
+      <span className="stat-l">{label}</span>
+      <span className="stat-v">{value}</span>
+      {basis && <span className="stat-b">{basis}</span>}
     </div>
+  );
+}
+
+/** A raised panel. Use sparingly: for the one decision on a screen, never as a default wrapper. */
+export function Panel({ children, tone, className = '', as = 'section', labelledBy }: { children: ReactNode; tone?: 'accent' | 'money' | 'warn' | 'bad'; className?: string; as?: 'section' | 'div'; labelledBy?: string }) {
+  const Tag = as;
+  return <Tag className={`panel ${tone ? `panel-${tone}` : ''} ${className}`} aria-labelledby={labelledBy}>{children}</Tag>;
+}
+
+/** Numbered steps for a flow (e.g. List, Limits, Negotiate, Approve). States are announced, not colour-only. */
+export function Steps({ steps, current, label }: { steps: string[]; current: number; label: string }) {
+  return (
+    <ol className="steps" aria-label={label}>
+      {steps.map((s, i) => {
+        const st = i < current ? 'done' : i === current ? 'cur' : 'todo';
+        return (
+          <li key={s} className={`step ${st}`} aria-current={st === 'cur' ? 'step' : undefined}>
+            <span className="step-n" aria-hidden>{st === 'done' ? <Icon name="check" size={12} stroke={2} /> : i + 1}</span>
+            <span className="step-t">{s}<span className="sr-only">{st === 'done' ? ' (done)' : st === 'cur' ? ' (current step)' : ''}</span></span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -140,9 +196,9 @@ export function VerdictChip({ verdict }: { verdict?: RuleVerdict | string | null
 
 // ---------------------------------------------------------------- Money
 /** ₹ with Indian digit grouping (1,23,456.00) and tabular numerals. Input is integer paise. */
-export function Money({ paise, whole, size, className = '' }: { paise: number | null | undefined; whole?: boolean; size?: 'lg' | 'xl'; className?: string }) {
+export function Money({ paise, whole, size, tone, className = '' }: { paise: number | null | undefined; whole?: boolean; size?: 'lg' | 'xl'; tone?: 'save'; className?: string }) {
   const text = rupees(paise, whole);
-  return <span className={`money ${size || ''} ${className}`}>{text}</span>;
+  return <span className={`money ${size || ''} ${tone ? `money-${tone}` : ''} ${className}`}>{text}</span>;
 }
 
 // ---------------------------------------------------------------- Callout

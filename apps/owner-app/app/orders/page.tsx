@@ -7,9 +7,9 @@ export const metadata: Metadata = { title: 'Orders' };
 
 export default function OrdersPage() {
   return (
-    <div className="narrow">
+    <div className="wide">
       <AuthGate>
-        <PageHead eyebrow="Orders" title="Orders">Each approved cart becomes one order per supplier. Open one to pay or check its progress.</PageHead>
+        <PageHead title="Orders" description="Each approved cart becomes one order per supplier. Pay from here and check how far each order has gone." />
         <OrdersView />
       </AuthGate>
     </div>

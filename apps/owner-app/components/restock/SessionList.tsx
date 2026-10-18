@@ -54,8 +54,8 @@ export function SessionList() {
   const rows = (data || []).filter((r) => !q.trim() || (r.title || '').toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <div className="stack lg">
-      <PageHead title="Restocks" />
-      <NewRestockButton />
+      <PageHead title="Restocks" description="Every list you have started, newest first. Open one to carry on where you left off."
+        action={<div className="ph-primary"><NewRestockButton /></div>} />
       {loading && !data && (
         <div className="rf-skel-rows" aria-busy="true" aria-label="Loading your restocks">
           {[62, 48, 56, 40].map((w) => <div key={w} className="rf-skel-row" style={{ minHeight: 64 }}><div className="stack xs"><div className="skeleton" style={{ width: `${w}%` }} /><div className="skeleton rf-sm" /></div><div className="skeleton" /></div>)}

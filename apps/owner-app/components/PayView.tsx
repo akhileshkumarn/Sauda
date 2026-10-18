@@ -52,6 +52,7 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
   const paidPaise = Math.round(parseFloat(amt || '0') * 100);
 
   const steps: Step[] = [
+    { key: 'appr', title: 'You approved the cart', state: 'done', body: 'Nothing is ordered without your approval.' },
     { key: 'po', title: 'Purchase order sent', state: 'done', body: <>To {name}{o.created_at ? ` · ${ist(o.created_at)}` : ''}</> },
     { key: 'ack', title: 'Supplier accepted', state: ackOk ? 'done' : ackBad ? 'bad' : 'current',
       body: ackOk ? `${name} confirmed the purchase order.` : ackBad ? `${name} did not confirm the order${o.po_error ? ' (could not be reached)' : ''}. Call them before paying.` : 'Waiting for the supplier to confirm.' },
@@ -95,7 +96,7 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
       {more > 0 && <Callout tone="info">This restock created {more + 1} orders, one per supplier. <Link href="/orders">See all orders</Link> to pay each one.</Callout>}
       <div className="pay-head">
         <div className="pay-sup">
-          <span className="row sm"><span className="pay-sup-name">{name}</span><span className="tag">Simulated</span></span>
+          <span className="row sm"><span className="pay-sup-name">{name}</span><span className="pay-sim" title="A simulated distributor agent, not a real business">Simulated supplier</span></span>
           <span className="small muted">{o.created_at ? `Ordered ${ist(o.created_at)}` : 'Order'}</span>
         </div>
         <div className="pay-tot">
@@ -160,7 +161,7 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
       )}
       {result && <Callout tone={result.ok ? 'ok' : 'bad'}>{result.text}</Callout>}
 
-      <Card title="Progress" className="pay-tl">
+      <Card title="Progress" subtitle="Sauda tracks up to your payment report. Payment is your claim, not bank-verified; delivery is not tracked." className="pay-tl">
         <Timeline steps={steps} label="Order progress" />
       </Card>
 

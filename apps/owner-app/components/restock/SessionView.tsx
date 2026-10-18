@@ -16,7 +16,11 @@ import type { FinalMeta } from '@/lib/voice';
 import { DraftEditor, type EditLine } from '../DraftCard';
 import { MandateForm } from '../MandateForm';
 import { EDITABLE_STATUSES, negotiationLabel, OrderPill, SessionPill } from '../status';
-import { Button, ButtonLink, Callout, Card, ErrorState, Evidence, Icon, Money, Skeleton, StatusPill } from '../ui';
+import { Button, ButtonLink, Callout, Card, ErrorState, Evidence, Icon, Money, Skeleton, StatusPill, Steps } from '../ui';
+import { BrandMark } from '../BrandMark';
+
+import { RESTOCK_STEPS } from './steps';
+const STEP_OF: Record<string, number> = { draft: 0, awaiting_review: 0, negotiating: 2, awaiting_approval: 3, ordered: 4, completed: 4 };
 import { Sheet } from '../ui-client';
 import { LatencyPanel } from './LatencyPanel';
 
@@ -293,9 +297,12 @@ export function SessionView({ sid }: { sid: string }) {
     el?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   };
 
+  const step = reviewing && editable ? 1 : STEP_OF[s.status];
+  const hasDock = editable && !reviewing;
+  const ownerTurns = turns.filter((t) => t.role === 'owner').length;
   return (
-    <div className="stack lg" style={{ flex: 1 }}>
-      <div className="stack sm">
+    <div className={`stack lg rs ${hasDock ? 'has-dock' : ''}`} style={{ flex: 1 }}>
+      <div className="stack sm rs-head">
         <div className="row between sm">
           <Link href="/restock" className="rf-back"><span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><Icon name="chev" size={14} /></span>Restocks</Link>
           <div className="row sm">
@@ -307,6 +314,7 @@ export function SessionView({ sid }: { sid: string }) {
         <input id="sess-title" className="title-input" value={titleText} readOnly={!editable} maxLength={80} title={`Started ${ist(s.created_at)} · saved ${relTime(s.updated_at)}`}
           onChange={(e) => setTitleText(e.target.value)} onBlur={(e) => editable && rename(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setTitleText(s.title); (e.target as HTMLInputElement).blur(); } }} />
+        {step !== undefined && <div className="rs-steps"><Steps steps={RESTOCK_STEPS} current={step} label="Restock progress" /></div>}
       </div>
 
       {notice && <Callout tone="warn">{notice} <button type="button" className="linkbtn rf-tap" style={{ minHeight: 32 }} onClick={() => setNotice(null)}>OK</button></Callout>}
@@ -320,8 +328,8 @@ export function SessionView({ sid }: { sid: string }) {
         ) : null} />
 
       {turns.length > 0 && (
-        <details className="evidence">
-          <summary><span className="chev"><Icon name="chev" size={14} /></span>Conversation · {turns.filter((t) => t.role === 'owner').length}</summary>
+        <details className="evidence rs-convo">
+          <summary><span className="chev"><Icon name="chev" size={14} /></span>Conversation · {ownerTurns}</summary>
           <div className="ev-body turns" style={{ fontFamily: 'inherit' }}>
             {turns.slice(-12).map((t) => (
               <div key={t.turn_id} className={`bubble ${t.role === 'owner' ? 'me' : 'agent'}`} style={{ fontSize: 14 }}>
@@ -333,7 +341,14 @@ export function SessionView({ sid }: { sid: string }) {
       )}
 
       {editable && reviewing && (
-        <div id="limits" className="stack lg">
+        <div id="limits" className="stack lg panel panel-accent rs-limits">
+          <div className="rs-auth">
+            <span className="rs-auth-ico" aria-hidden><Icon name="lock" size={16} /></span>
+            <div className="stack xs">
+              <b>Now you authorise money</b>
+              <span className="small muted">Up to here Sauda only understood your list. These limits are the most it may spend; signing still buys nothing.</span>
+            </div>
+          </div>
           <MandateForm draft={draft} lines={lines} negotiationId={prep?.negotiation_id || s.negotiation_id || undefined} sid={sid} />
         </div>
       )}
@@ -356,12 +371,28 @@ export function SessionView({ sid }: { sid: string }) {
       {dbg && <LatencyPanel />}
 
       {editable && !reviewing && (
-        <form className="dock rf-dock" aria-label="Change the list" onSubmit={(e) => { e.preventDefault(); sendTyped(); }}>
+        <form className="dock rf-dock rs-assist" aria-label="Talk to Sauda to change the list" onSubmit={(e) => { e.preventDefault(); sendTyped(); }}>
           <div className="sr-only" role="status" aria-live="polite">{inflight > 0 ? 'Updating the list…' : sauda || ''}</div>
+          <div className="as-head">
+            <BrandMark size={24} />
+            <div className="stack xs grow">
+              <b>Sauda</b>
+              <span className="as-sub">{inflight > 0 ? 'Updating your list…' : 'Understands your list. Cannot spend money.'}</span>
+            </div>
+          </div>
+          {turns.length > 0 && (
+            <ol className="as-log" aria-label="Conversation so far">
+              {turns.slice(-8).map((t) => (
+                <li key={t.turn_id} className={t.role === 'owner' ? 'me' : 'sauda'}>
+                  {t.role === 'owner' && t.source === 'voice' ? <span className="as-src"><Icon name="mic" size={12} label="Spoken" /></span> : null}{t.text}
+                </li>
+              ))}
+            </ol>
+          )}
           {inflight > 0 ? (
             <div className="rf-toast busy" aria-hidden><span className="spinner" />Updating the list…</div>
           ) : sauda ? (
-            <div className="rf-toast" key={sauda} aria-hidden>
+            <div className={`rf-toast ${lastSauda && sauda && lastSauda.text.startsWith(sauda) ? 'in-log' : ''}`} key={sauda} aria-hidden>
               <span className="s">S</span>
               <span className="grow clamp2">{sauda}</span>
             </div>
@@ -401,9 +432,10 @@ export function SessionView({ sid }: { sid: string }) {
                   {budget ? <> · <span className={overBudget ? 'over' : undefined}>budget <Money paise={budget} whole />{overBudget ? ' (over)' : ''}</span></> : null}
                 </span>
               </div>
-              <Button busy={prepBusy} busyLabel="Preparing…" disabled={!lines.length || inflight > 0} onClick={startReview} title="Nothing is signed or bought until you choose to">Review limits</Button>
+              <Button busy={prepBusy} busyLabel="Preparing…" disabled={!lines.length || inflight > 0} onClick={startReview} title="Nothing is signed or bought until you choose to">Review limits<Icon name="arrow" size={16} /></Button>
             </div>
           )}
+          {lines.length > 0 && <p className="as-next"><Icon name="lock" size={12} />Next: set spending limits. Nothing is signed yet.</p>}
           <div className="cfield">
             <label htmlFor="turn-input" className="sr-only">Type a change or a list</label>
             <textarea id="turn-input" ref={taRef} rows={1} value={input} maxLength={2000}

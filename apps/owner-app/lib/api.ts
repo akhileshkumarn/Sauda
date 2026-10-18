@@ -201,19 +201,24 @@ export async function submitPaymentProof(orderId: string, proof: { utr: string; 
 
 /** GET /metrics/{shop_id} */
 export async function getMetrics(shopId: string): Promise<Metrics> {
-  if (MOCK) return mock.mockMetrics;
+  if (MOCK) {
+    await sleep(250);
+    if (mock.mockMode() === 'error') throw Object.assign(new Error('Failed to fetch'), { status: 0 });
+    if (mock.mockMode() === 'empty') return { rupees_saved: 0, savings_pct: 0, ceiling_compliance: 0, time_saved_min: 0, attacks_blocked: 0, orders: 0 };
+    return mock.mockMetrics;
+  }
   return request('GET', `/metrics/${encodeURIComponent(shopId)}`);
 }
 
 /** GET /verify/{negotiation_id} -> {events:[{seq,type,hash_ok,link_ok,sig_ok}], chain_ok} */
 export async function verifyChain(negotiationId: string): Promise<VerifyResponse> {
-  if (MOCK) return mock.mockVerify();
+  if (MOCK) { if (mock.mockMode() === 'error') throw Object.assign(new Error('Failed to fetch'), { status: 0 }); return mock.mockVerify(); }
   return request('GET', `/verify/${encodeURIComponent(negotiationId)}`);
 }
 
 /** GET /events?negotiation={id} -> {events: LedgerEvent[]} (a bare array is also accepted) */
 export async function getEvents(negotiationId: string): Promise<LedgerEvent[]> {
-  if (MOCK) return mock.mockEvents();
+  if (MOCK) { if (mock.mockMode() === 'error') throw Object.assign(new Error('Failed to fetch'), { status: 0 }); return mock.mockEvents(); }
   const r = await request<{ events: LedgerEvent[] } | LedgerEvent[]>('GET', `/events?negotiation=${encodeURIComponent(negotiationId)}`);
   return Array.isArray(r) ? r : r.events;
 }
@@ -247,7 +252,12 @@ export async function searchProducts(q: string, limit = 20, signal?: AbortSignal
 
 /** GET /attack/scenarios (contract 6, no auth) */
 export async function getScenarios(): Promise<AttackScenario[]> {
-  if (MOCK) { await sleep(300); return mock.mockScenarios; }
+  if (MOCK) {
+    await sleep(300);
+    if (mock.mockMode() === 'error') throw Object.assign(new Error('Failed to fetch'), { status: 0 });
+    if (mock.mockMode() === 'empty') return [];
+    return mock.mockScenarios;
+  }
   const r = await request<{ scenarios: AttackScenario[] }>('GET', '/attack/scenarios');
   return r.scenarios || [];
 }

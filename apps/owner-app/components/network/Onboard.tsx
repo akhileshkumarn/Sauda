@@ -7,7 +7,7 @@ import {
   INDIAN_STATES, cinCheck, createBusiness, errorDetail, fssaiCheck, gstinCheck, looksLikeAadhaar, pinCheck, rememberBid, runVerification, shareLocation, udyamCheck,
 } from '@/lib/network';
 import type { TnRole } from '@/lib/types';
-import { Button, Callout, Icon } from '../ui';
+import { Button, Callout, Icon, Steps } from '../ui';
 import { Field, NIcon } from './shared';
 
 type Constitution = 'proprietorship' | 'partnership' | 'private_limited' | 'public_limited' | 'llp' | 'other';
@@ -146,12 +146,10 @@ export function Onboard() {
     <div className="narrow">
       <div className="stack sm">
         <Link href="/network" className="small muted row sm tn-back" style={{ minHeight: 32 }}><Icon name="chev" size={14} /><span>Network</span></Link>
-        <h1 ref={head} tabIndex={-1} style={{ outline: 'none' }}>{role === 'seller' ? 'Verify your supplier business' : 'Verify your business'}</h1>
+        <h1 ref={head} tabIndex={-1} className="tn-onboard-h">{role === 'seller' ? 'Verify your supplier business' : 'Verify your business'}</h1>
         <p className="muted">Step {step + 1} of 5 · {STEPS[step]}. You can go back at any time; nothing is sent until the last step.</p>
       </div>
-      <ol className="steps" aria-label="Progress">
-        {STEPS.map((s, i) => <li key={s} className={i < step ? 'done' : i === step ? 'cur' : ''} aria-current={i === step ? 'step' : undefined}><span className="num">{i + 1}</span> <span className="lbl">{s}</span></li>)}
-      </ol>
+      <div className="tn-steps"><Steps steps={STEPS} current={step} label="Progress" /></div>
 
       <form className="stack lg" onSubmit={(e) => { e.preventDefault(); if (step < 4) next(); else submit(false); }} noValidate>
         {step === 0 && (
@@ -166,7 +164,7 @@ export function Onboard() {
             <fieldset className="tn-group">
               <legend>About the business</legend>
               <Field label="Business name" hint="as on your name board"><input className="input" value={d.display_name} onChange={(e) => set('display_name', e.target.value)} autoComplete="organization" aria-invalid={touched && !d.display_name.trim()} /></Field>
-              <Field label="Legal name" hint="if different, as on GST or company records"><input className="input" value={d.legal_name} onChange={(e) => set('legal_name', e.target.value)} /></Field>
+              <Field label="Legal name" hint="if different, as on GST or company records" why="Registry records use the legal name; we compare it with what they show."><input className="input" value={d.legal_name} onChange={(e) => set('legal_name', e.target.value)} /></Field>
               <Field label="Kind of business">
                 <select className="input" value={d.kind} onChange={(e) => set('kind', e.target.value)}>{(d.role === 'seller' ? SELLER_KINDS : BUYER_KINDS).map((k) => <option key={k.v} value={k.v}>{k.label}</option>)}</select>
               </Field>
@@ -186,17 +184,17 @@ export function Onboard() {
             <fieldset className="tn-group">
               <legend>Required for this business type</legend>
               {d.gst_registered === 'yes' && (
-                <Field label="GSTIN" msg={d.gstin ? (gstStateMismatch ? { ok: false, message: `${gst.message} Your address says ${d.state || pin.state}.` } : gst) : null}>
+                <Field label="GSTIN" why="To match your business with the GST registry. Partners see only whether it matched, not your returns." msg={d.gstin ? (gstStateMismatch ? { ok: false, message: `${gst.message} Your address says ${d.state || pin.state}.` } : gst) : null}>
                   <input className="input num" value={d.gstin} onChange={(e) => set('gstin', e.target.value.toUpperCase())} maxLength={15} inputMode="text" autoCapitalize="characters" spellCheck={false} placeholder="36ABCDE1234F1Z5" aria-invalid={touched && !gst.ok} />
                 </Field>
               )}
               {(isCompany || isLlp) && (
-                <Field label={isLlp ? 'LLPIN' : 'CIN (company identification number)'} msg={d.cin_llpin ? cinCheck(d.cin_llpin, isLlp ? 'llp' : 'company') : null}>
+                <Field label={isLlp ? 'LLPIN' : 'CIN (company identification number)'} why="Companies and LLPs are listed with the Ministry of Corporate Affairs; this lets us find yours." msg={d.cin_llpin ? cinCheck(d.cin_llpin, isLlp ? 'llp' : 'company') : null}>
                   <input className="input num" value={d.cin_llpin} onChange={(e) => set('cin_llpin', e.target.value.toUpperCase())} spellCheck={false} placeholder={isLlp ? 'AAB-1234' : 'U15400TG2015PTC099999'} />
                 </Field>
               )}
               {food && (
-                <Field label="FSSAI licence or registration number" hint="needed to sell food" msg={d.fssai ? fssaiCheck(d.fssai) : null}>
+                <Field label="FSSAI licence or registration number" hint="needed to sell food" why="Food businesses need an FSSAI licence by law; buyers and suppliers in food ask for it." msg={d.fssai ? fssaiCheck(d.fssai) : null}>
                   <input className="input num" value={d.fssai} onChange={(e) => set('fssai', e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" maxLength={14} placeholder="14 digits" />
                 </Field>
               )}
@@ -206,7 +204,7 @@ export function Onboard() {
 
             <fieldset className="tn-group optional tn-opt">
               <legend>Optional: helps {d.role === 'seller' ? 'buyers' : 'suppliers'} trust you</legend>
-              <Field label="Udyam registration number" msg={d.udyam ? udyamCheck(d.udyam) : null}>
+              <Field label="Udyam registration number" why="Optional. A Udyam number shows the business is registered as an MSME." msg={d.udyam ? udyamCheck(d.udyam) : null}>
                 <input className="input num" value={d.udyam} onChange={(e) => set('udyam', e.target.value.toUpperCase())} spellCheck={false} placeholder="UDYAM-TS-02-0012345" />
               </Field>
               {d.role === 'seller' && (
@@ -223,7 +221,7 @@ export function Onboard() {
           <>
             <fieldset className="tn-group">
               <legend>Where the business operates</legend>
-              <Field label="Shop or warehouse address" hint="building, street, area"><input className="input" value={d.line} onChange={(e) => set('line', e.target.value)} autoComplete="street-address" /></Field>
+              <Field label="Shop or warehouse address" hint="building, street, area" why="Trading partners deliver here; we check the address and PIN exist and match."><input className="input" value={d.line} onChange={(e) => set('line', e.target.value)} autoComplete="street-address" /></Field>
               <div className="grid2 stack-narrow">
                 <Field label="City or town"><input className="input" value={d.city} onChange={(e) => set('city', e.target.value)} autoComplete="address-level2" /></Field>
                 <Field label="PIN code" msg={d.pin ? (pinMismatch ? { ok: false, message: `${pin.message} You chose ${d.state}.` } : pin) : null}>
@@ -252,7 +250,7 @@ export function Onboard() {
           <fieldset className="tn-group">
             <legend>Who is acting for the business</legend>
             <p className="small muted">The person setting this up. Later, a reviewer may ask for a letter or document showing you can act for the business.</p>
-            <Field label="Your name"><input className="input" value={d.rep_name} onChange={(e) => set('rep_name', e.target.value)} autoComplete="name" /></Field>
+            <Field label="Your name" why="Partners need to know who is acting for the business. Shown to businesses you trade with."><input className="input" value={d.rep_name} onChange={(e) => set('rep_name', e.target.value)} autoComplete="name" /></Field>
             <Field label="Your role">
               <select className="input" value={d.rep_role} onChange={(e) => set('rep_role', e.target.value)}>{REP_ROLES.map((r) => <option key={r}>{r}</option>)}</select>
             </Field>

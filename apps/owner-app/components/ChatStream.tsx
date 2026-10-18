@@ -8,7 +8,8 @@ import { rememberNegotiation } from '@/lib/session';
 import type { Draft, GateReport as GR, SseEvent } from '@/lib/types';
 import { DraftCard } from './DraftCard';
 import { emptyNeg, negDown, negGate, negGuard, negOffer, NegotiationPanel, type NegState } from './Negotiation';
-import { Button, ButtonLink, Callout, Card, Evidence, Icon, PageHead } from './ui';
+import { Button, ButtonLink, Callout, Card, Evidence, Icon, PageHead, Steps } from './ui';
+import { RESTOCK_STEPS } from './restock/steps';
 
 // Voice capture belongs to the voice agent; loaded client-side only.
 const VoiceCapture = dynamic(() => import('@/components/voice').then((m) => m.VoiceCapture), { ssr: false, loading: () => null });
@@ -173,9 +174,10 @@ export function ChatStream({ runMandateId }: { runMandateId?: string }) {
 
   return (
     <div className="stack lg">
-      <PageHead eyebrow="Restock" title={runMandateId ? 'Sauda is negotiating for you' : 'What do you need to restock?'}>
+      <PageHead crumbs={runMandateId ? [{ href: '/restock', label: 'Restock' }, { label: 'Negotiation' }] : undefined} title={runMandateId ? 'Sauda is negotiating for you' : 'What do you need to restock?'}>
         {runMandateId ? 'Live view of quotes and safety checks. Nothing is ordered until you approve.' : 'Type or speak your list. You check every line and sign your limits before Sauda talks to any supplier.'}
       </PageHead>
+      {runMandateId && <Steps steps={RESTOCK_STEPS} current={2} label="Restock progress" />}
 
       {items.length === 0 && !runMandateId && (
         <Card title="Try an example" subtitle="Tap one to send it, or write your own below.">

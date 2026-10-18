@@ -154,11 +154,12 @@ export function Limitations({ items, title = 'What this does not tell you' }: { 
   );
 }
 
-export function Field({ label, hint, children, msg }: { label: ReactNode; hint?: ReactNode; children: ReactNode; msg?: { ok: boolean; message: string } | null }) {
+export function Field({ label, hint, children, msg, why }: { label: ReactNode; hint?: ReactNode; children: ReactNode; msg?: { ok: boolean; message: string } | null; why?: ReactNode }) {
   return (
     <label className="field">
       <span>{label}{hint && <span className="hint"> · {hint}</span>}</span>
       {children}
+      {why && <span className="why"><NIcon name="lock" size={12} /><span><span className="why-k">Why we ask:</span> {why}</span></span>}
       {msg && msg.message && (
         <span className={`fieldmsg ${msg.ok ? 'ok' : 'bad'}`} aria-live="polite">
           <span>{msg.ok ? '✓' : '!'} {msg.message}</span><span className="fmt">Format check only</span>

@@ -1,5 +1,7 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from './ui';
 import { AUTH_MODE, onUser, signOut } from '@/lib/auth';
 import { MOCK } from '@/lib/api';
 import { effectiveTheme, getThemePref, setThemePref } from '@/lib/theme';
@@ -18,8 +20,10 @@ function SunMoon({ dark }: { dark: boolean }) {
   );
 }
 
-/** Top-right controls: a light/dark toggle and, when signed in, the profile menu. */
-export function ProfileMenu() {
+/** Shell controls: a light/dark toggle and, when signed in, the profile menu.
+ *  placement 'up' (sidebar foot) shows the name beside the avatar and opens the menu upwards. */
+export function ProfileMenu({ placement = 'down' }: { placement?: 'down' | 'up' }) {
+  const menuId = `profile-menu-${placement}`;
   const [user, setUser] = useState<User | null>(null);
   const [dark, setDark] = useState(false);
   const [open, setOpen] = useState(false);
@@ -71,25 +75,32 @@ export function ProfileMenu() {
   const initial = (user?.name || user?.email || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <div className="topbar-right" ref={ref}>
+    <div className={`topbar-right ${placement === 'up' ? 'pm-up' : ''}`} ref={ref}>
       <button type="button" className="icon-btn" onClick={toggle} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'}>
         <SunMoon dark={dark} />
       </button>
       {user && (
         <>
-          <button ref={btnRef} type="button" className="avatar-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? 'profile-menu' : undefined} aria-label={`Your profile: ${user.name}`}
+          <button ref={btnRef} type="button" className="avatar-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined} aria-label={`Your profile: ${user.name}`}
             onClick={() => setOpen((o) => !o)}
             onKeyDown={(e) => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true); } }}>
-            {user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : <span>{initial}</span>}
+            <span className="avatar-face">{user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : <span>{initial}</span>}</span>
+            {placement === 'up' && <span className="avatar-name">{user.name}</span>}
           </button>
           {open && (
-            <div className="pm-pop" id="profile-menu" role="menu" aria-label="Profile" ref={popRef} tabIndex={-1}>
+            <div className="pm-pop" id={menuId} role="menu" aria-label="Profile" ref={popRef} tabIndex={-1}>
               <div className="pm-head">
                 <span className="pm-av" aria-hidden>{user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : initial}</span>
                 <span className="pm-id">
                   <span className="pm-name">{user.name}</span>
                   {user.email ? <span className="pm-email">{user.email}</span> : <span className="pm-email">{MOCK ? 'Sample shop, no account' : 'Signed in'}</span>}
                 </span>
+              </div>
+              <div className="pm-sep" role="separator" />
+              <div className="pm-links">
+                <Link href="/network" role="menuitem" className="pm-item" onClick={() => setOpen(false)}><Icon name="shield" size={16} />Business and verification</Link>
+                <Link href="/restock" role="menuitem" className="pm-item" onClick={() => setOpen(false)}><Icon name="cart" size={16} />Restock history</Link>
+                <Link href="/orders" role="menuitem" className="pm-item" onClick={() => setOpen(false)}><Icon name="box" size={16} />Orders and payments</Link>
               </div>
               {AUTH_MODE === 'firebase' && !MOCK ? (
                 <>

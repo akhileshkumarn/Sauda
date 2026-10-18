@@ -107,7 +107,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     onUser(setUser).then((f) => { off = f; }).catch((e) => { setErr(String(e?.message || e)); setUser(null); });
     return () => off();
   }, []);
-  if (user === undefined) return <div className="card"><Skeleton lines={3} /></div>;
+  if (user === undefined) return <div className="narrow" aria-busy="true" aria-label="Checking sign-in"><Skeleton lines={3} /></div>;
   if (!user) {
     const signIn = () => { setBusy(true); setErr(null); signInWithGoogle().catch((e) => setErr(String(e?.message || e))).finally(() => setBusy(false)); };
     return <SignedOut busy={busy} err={err} onSignIn={signIn} />;

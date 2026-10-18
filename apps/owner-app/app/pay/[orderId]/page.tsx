@@ -11,7 +11,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   return (
     <div className="narrow">
       <AuthGate>
-        <PageHead eyebrow="Restock · step 4 of 4" title="Pay" />
+        <PageHead crumbs={[{ href: '/orders', label: 'Orders' }, { label: decodeURIComponent(orderId) }]} title="Pay this order" />
         <PayView orderId={decodeURIComponent(orderId)} more={more ? parseInt(more, 10) || 0 : 0} />
       </AuthGate>
     </div>

@@ -70,14 +70,9 @@ function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; r
       <CategoryHero summary={s} roles={b.roles} title={<>{b.display_name}{b.address?.city ? ` · ${b.address.city}` : ''}</>} />
       <SimulatedNote show={sim} />
 
-      <section aria-labelledby="dims-h">
-        <div className="section-h"><h2 id="dims-h">What was checked</h2><span className="xs muted">Times in IST</span></div>
-        <DimensionList dims={s.dimensions} checks={data.checks} />
-        {!s.dimensions.length && !data.checks.length && <div style={{ paddingTop: 12 }}><Button size="sm" busy={busy === 'rerun'} busyLabel="Running checks…" onClick={rerun}>Run checks</Button></div>}
-      </section>
-
-      <section aria-labelledby="out-h" className="stack sm">
-        <SectionHead title={<span id="out-h">Outstanding checks{outstanding.length ? ` · ${outstanding.length}` : ''}</span>} />
+      <section aria-labelledby="out-h" className={`stack sm ${outstanding.length ? 'tn-todo' : ''}`}>
+        <SectionHead title={<span id="out-h">{outstanding.length ? `What you can do next · ${outstanding.length}` : 'Outstanding checks'}</span>} />
+        {outstanding.length > 0 && <p className="small muted">Each one adds evidence to your record. Businesses you trade with may ask for some of them before they approve you.</p>}
         {outstanding.length === 0 && <p className="small muted">Nothing outstanding. You can still add documents below if a business asks for them.</p>}
         <ul className="req-list">
           {outstanding.map((code) => {
@@ -105,6 +100,12 @@ function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; r
             <p className="small muted">Location is read once, only when you tap, and is used to compare with your address. Stored with a timestamp; never tracked.</p>
           </div>
         </details>
+      </section>
+
+      <section aria-labelledby="dims-h">
+        <div className="section-h"><h2 id="dims-h">What was checked</h2><span className="xs muted">Times in IST</span></div>
+        <DimensionList dims={s.dimensions} checks={data.checks} />
+        {!s.dimensions.length && !data.checks.length && <div style={{ paddingTop: 12 }}><Button size="sm" busy={busy === 'rerun'} busyLabel="Running checks…" onClick={rerun}>Run checks</Button></div>}
       </section>
 
       <Documents bid={b.bid} key={`docs-${data.checks.length}`} />
