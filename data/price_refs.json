@@ -1,0 +1,316 @@
+[
+ {
+  "commodity": "rice",
+  "mandi_commodity": "Rice",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 6550,
+  "min": 6200,
+  "max": 6900,
+  "n_records": 3,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "wheat",
+  "mandi_commodity": "Wheat",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 4350,
+  "min": 3900,
+  "max": 4800,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "atta",
+  "mandi_commodity": "Wheat Atta",
+  "district": "",
+  "state": "",
+  "scope": "india",
+  "modal_price_paise_per_kg": 7600,
+  "min": 6600,
+  "max": 9200,
+  "n_records": 1,
+  "markets": [
+   "Fancy Bazaar APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, all-India (district and state had no rows)",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "tur_dal",
+  "mandi_commodity": "Red gram split/Arhar dal/Tur dal",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 11800,
+  "min": 9800,
+  "max": 13800,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "moong_dal",
+  "mandi_commodity": "Green Gram Dal(Moong Dal)",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 10400,
+  "min": 9800,
+  "max": 11000,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "chana_dal",
+  "mandi_commodity": "Bengal Gram Dal(Chana Dal)",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 8800,
+  "min": 7800,
+  "max": 9800,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "urad_dal",
+  "mandi_commodity": "Black Gram Dal(Urd Dal)",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 14300,
+  "min": 10800,
+  "max": 17800,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "masoor_dal",
+  "mandi_commodity": "Masur Dal",
+  "district": "",
+  "state": "",
+  "scope": "india",
+  "modal_price_paise_per_kg": 9708,
+  "min": 9650,
+  "max": 9850,
+  "n_records": 20,
+  "markets": [
+   "APMC Mumbai ",
+   "Asansol APMC",
+   "Atarra APMC",
+   "Baberu APMC",
+   "Barabanki APMC",
+   "Bareilly APMC",
+   "Birbhum APMC",
+   "Bishnupur(Bankura) APMC",
+   "Durgapur APMC",
+   "Ghaziabad APMC",
+   "Habra APMC",
+   "Kalipur(Arambagh Krishak Bazar)APMC",
+   "Kolaghat APMC",
+   "Paliakala APMC",
+   "Safdarganj APMC",
+   "Saharanpur APMC",
+   "Shamli APMC",
+   "Siliguri APMC",
+   "Tamluk (Medinipur E) APMC",
+   "Tanakpur APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, all-India (district and state had no rows)",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "sugar",
+  "mandi_commodity": "Sugar",
+  "district": "",
+  "state": "",
+  "scope": "india",
+  "modal_price_paise_per_kg": 5725,
+  "min": 5525,
+  "max": 5975,
+  "n_records": 2,
+  "markets": [
+   "APMC Mumbai ",
+   "Fancy Bazaar APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, all-India (district and state had no rows)",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "jaggery",
+  "mandi_commodity": "Gur(Jaggery)",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 6600,
+  "min": 6400,
+  "max": 6800,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "mustard_oil",
+  "mandi_commodity": "Mustard Oil",
+  "district": "",
+  "state": "",
+  "scope": "india",
+  "modal_price_paise_per_kg": 18575,
+  "min": 18300,
+  "max": 18900,
+  "n_records": 4,
+  "markets": [
+   "Birbhum APMC",
+   "Durgapur APMC",
+   "Fancy Bazaar APMC",
+   "Sainthia APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, all-India (district and state had no rows)",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "coconut_oil",
+  "mandi_commodity": "Coconut Oil",
+  "district": "",
+  "state": "",
+  "scope": "india",
+  "modal_price_paise_per_kg": 26100,
+  "min": 25800,
+  "max": 26650,
+  "n_records": 2,
+  "markets": [
+   "Kanjangadu Market",
+   "Thalasserry Market"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, all-India (district and state had no rows)",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "ghee",
+  "mandi_commodity": "Ghee",
+  "district": "",
+  "state": "",
+  "scope": "india",
+  "modal_price_paise_per_kg": 64400,
+  "min": 59650,
+  "max": 69150,
+  "n_records": 2,
+  "markets": [
+   "APMC Mumbai ",
+   "Visakhapatnam APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, all-India (district and state had no rows)",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "onion",
+  "mandi_commodity": "Onion",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 3600,
+  "min": 2750,
+  "max": 4150,
+  "n_records": 4,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "potato",
+  "mandi_commodity": "Potato",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 1750,
+  "min": 1000,
+  "max": 2500,
+  "n_records": 2,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "dry_chillies",
+  "mandi_commodity": "Dry Chillies",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 33000,
+  "min": 28000,
+  "max": 38000,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ },
+ {
+  "commodity": "coriander_seed",
+  "mandi_commodity": "Corriander seed",
+  "district": "Bengaluru Urban",
+  "state": "Karnataka",
+  "scope": "district",
+  "modal_price_paise_per_kg": 21000,
+  "min": 19000,
+  "max": 23000,
+  "n_records": 1,
+  "markets": [
+   "Bengaluru APMC"
+  ],
+  "source": "data.gov.in mandi modal price, median across markets, district Bengaluru Urban",
+  "source_url": "https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi",
+  "as_of": "2026-10-17"
+ }
+]

@@ -1,0 +1,14 @@
+# One image for buyer-agent and the three supplier agents; the Cloud Run command picks the app.
+FROM python:3.12-slim
+RUN pip install --no-cache-dir uv==0.9.5
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+COPY pyproject.toml uv.lock ./
+COPY packages packages
+COPY apps/buyer-agent apps/buyer-agent
+COPY apps/supplier-agent apps/supplier-agent
+RUN uv sync --frozen --no-dev
+COPY suppliers suppliers
+COPY data data
+ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PORT=8080
+CMD ["sh", "-c", "uvicorn buyer_agent.main:app --host 0.0.0.0 --port $PORT"]

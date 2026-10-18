@@ -1,0 +1,15 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "${_DOCKERFILE}", "-t", "${_IMAGE}", "${_BUILD_ARGS_1}", "${_BUILD_ARGS_2}", "${_BUILD_ARGS_3}", "${_BUILD_ARGS_4}", "${_BUILD_ARGS_5}", "${_BUILD_ARGS_6}", "${_BUILD_ARGS_7}", "."]
+images: ["${_IMAGE}"]
+substitutions:
+  _BUILD_ARGS_1: "--build-arg=UNUSED=1"
+  _BUILD_ARGS_2: "--build-arg=UNUSED=2"
+  _BUILD_ARGS_3: "--build-arg=UNUSED=3"
+  _BUILD_ARGS_4: "--build-arg=UNUSED=4"
+  _BUILD_ARGS_5: "--build-arg=UNUSED=5"
+  _BUILD_ARGS_6: "--build-arg=UNUSED=6"
+  _BUILD_ARGS_7: "--build-arg=UNUSED=7"
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8

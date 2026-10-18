@@ -1,0 +1,11 @@
+[project]
+name = "supplier-agent"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["google-adk[a2a]>=2.12", "google-genai>=1.30", "fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2.8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+[tool.hatch.build.targets.wheel]
+packages = ["supplier_agent"]

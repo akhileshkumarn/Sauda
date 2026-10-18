@@ -1,0 +1,8 @@
+{
+  "hosting": {
+    "site": "saudaai",
+    "public": "deploy/hosting/public",
+    "ignore": ["**/.*"],
+    "rewrites": [{ "source": "**", "run": { "serviceId": "owner-app", "region": "asia-south1" } }]
+  }
+}

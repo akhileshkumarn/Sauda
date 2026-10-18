@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.env.*.local
+node_modules/
+.next/
+out/
+*.pem
+data/raw/
+.DS_Store
+firebase-debug.log
+.firebaserc
+
+# added at submission time
+README.md

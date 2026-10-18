@@ -1,0 +1,21 @@
+[project]
+name = "sauda"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["sauda-trust", "sauda-ledger", "sauda-data", "buyer-agent", "supplier-agent"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "httpx>=0.27", "ruff>=0.6"]
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/buyer-agent", "apps/supplier-agent"]
+
+[tool.uv.sources]
+sauda-trust = { workspace = true }
+sauda-ledger = { workspace = true }
+sauda-data = { workspace = true }
+buyer-agent = { workspace = true }
+supplier-agent = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

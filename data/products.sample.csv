@@ -1,0 +1,9 @@
+gtin,name,brand,pack_size,category,mrp_paise,mrp_source,mrp_source_url,image_url
+8901725200015,Aashirvaad Shudh Chakki Atta 5 kg,Aashirvaad,5 kg,staples,29500,dev-fixture (not real data; data/products.csv wins),,
+8901058000177,Tata Salt Iodised 1 kg,Tata,1 kg,staples,2800,dev-fixture (not real data; data/products.csv wins),,
+8906201000455,Fortune Sunlite Refined Sunflower Oil 1 L,Fortune,1 L,oil,18500,dev-fixture (not real data; data/products.csv wins),,
+8901719030109,Parle-G Gold Biscuits 1 kg,Parle,1 kg,snacks,15000,dev-fixture (not real data; data/products.csv wins),,
+8901477100236,Maggi 2-Minute Masala Noodles 280 g (4-pack),Maggi,280 g,snacks,5600,dev-fixture (not real data; data/products.csv wins),,
+8901725410018,Tata Tea Premium 500 g,Tata,500 g,beverages,30000,dev-fixture (not real data; data/products.csv wins),,
+8903094000012,Toor Dal (Arhar) Unpolished 1 kg,Tata Sampann,1 kg,staples,19500,dev-fixture (not real data; data/products.csv wins),,
+8906201000523,Sugar (Refined) 1 kg,Madhur,1 kg,staples,5500,dev-fixture (not real data; data/products.csv wins),,
