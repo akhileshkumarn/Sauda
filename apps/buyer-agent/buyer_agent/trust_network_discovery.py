@@ -201,7 +201,7 @@ def card(b: dict, *, viewer_area: tuple[str | None, str | None] = (None, None), 
         "service_area": {"kind": area.get("kind"), "districts": area.get("districts") or [], "states": area.get("states") or [],
                          "basis": "self_declared", "label": area_label(area)},
         "min_order_paise": lst.get("min_order_paise"),
-        "notes": lst.get("notes"),
+        "notes": _clean_note(lst.get("notes"), fixture),
         "delivers_to_viewer": covers_district(area, *viewer_area),
         "trust": trust,
         "last_checked_at": last,
@@ -459,3 +459,12 @@ def connect(body: ConnectIn, v: Viewer = Depends(viewer)):
         ledger(b_, "tn.relationship.requested", actor, {"rid": rid, "buyer_bid": buyer["bid"], "seller_bid": seller["bid"],
                                                        "categories": cats, "message_blocked": bool(guard.get("blocked"))})
     return {"relationship": rel, "duplicate": False, "guard": guard}
+
+
+def _clean_note(note, fixture: bool):
+    """Older showcase listings carry internal notes ('Simulated demo listing.'); never show those to users."""
+    if not note:
+        return None
+    if fixture and any(w in note.lower() for w in ("demo", "simulat", "fixture", "sample")):
+        return None
+    return note

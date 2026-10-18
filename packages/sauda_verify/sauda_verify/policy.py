@@ -357,8 +357,8 @@ def outstanding(dims: dict[Dim, DimensionSummary]) -> list[str]:
             out.append(f"{label}: business contact confirmed; authority to act for the business still needs a "
                        "document reviewed by a person.")
         elif s.status in POSITIVE and not satisfies(s):
-            src = s.source_kind.value.replace("_", " ") if s.source_kind else "unknown"
-            out.append(f"{label}: only {src} so far; confirm with an authorised source or a reviewer.")
+            src = SOURCE_PHRASE.get(s.source_kind, "an unconfirmed source") if s.source_kind else "an unconfirmed source"
+            out.append(f"{label}: {src} so far; confirm with an authorised source or a reviewer.")
         elif s.status == S.partially_verified:
             out.append(f"{label}: partly verified; a detail still needs to be confirmed.")
     return out
@@ -414,3 +414,13 @@ def summarize(checks: Iterable[Check], biz: Business | None = None, *, evidence:
 
 def reason_text(reasons: Iterable[str]) -> list[str]:
     return [REASON_TEXT.get(r, r) for r in reasons]
+
+
+# Plain words for a source that is not yet strong enough, as shown to owners.
+SOURCE_PHRASE = {
+    SourceKind.simulated_fixture: "not checked against a government registry yet",
+    SourceKind.preliminary_validation: "only a format check",
+    SourceKind.self_declared: "only the owner's own statement",
+    SourceKind.device_signal: "only a device signal",
+    SourceKind.uploaded_evidence: "only an uploaded document",
+}
