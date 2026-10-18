@@ -166,6 +166,7 @@ class DimensionSummary(BaseModel):
     source_kind: SourceKind | None = None
     summary: str
     checked_at: str | None = None
+    check_type: str | None = None
 
 
 class Summary(BaseModel):

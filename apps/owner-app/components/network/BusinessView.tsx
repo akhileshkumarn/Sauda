@@ -11,6 +11,8 @@ import { Button, ButtonLink, Callout, ErrorState, Icon, SectionHead, Skeleton } 
 import { Sheet } from '../ui-client';
 import { CategoryHero, DimensionList, Limitations, NIcon, SimulatedNote, hasSimulated } from './shared';
 import { ListingSettings } from './Listing';
+import { ContactVerifyButton } from './ContactVerify';
+import { RoleSwitch } from './RoleSwitch';
 
 const MAX_MB = 8;
 
@@ -85,6 +87,7 @@ function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; r
                 {w.action === 'upload' && w.doc && <Button size="sm" variant="secondary" onClick={() => setUpload(w.doc!)}><NIcon name="upload" size={14} />Upload</Button>}
                 {w.action === 'location' && <Button size="sm" variant="secondary" busy={busy === 'location'} busyLabel="Asking…" onClick={locate}><NIcon name="pin" size={14} />Share location</Button>}
                 {w.action === 'review' && <Button size="sm" variant="secondary" busy={busy === 'review'} busyLabel="Asking…" onClick={askReview}>Request manual review</Button>}
+                {/^authorised representative/i.test(w.label) && <ContactVerifyButton bid={b.bid} onDone={reload} />}
               </li>
             );
           })}
@@ -109,6 +112,7 @@ function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; r
         {!s.dimensions.length && !data.checks.length && <div style={{ paddingTop: 12 }}><Button size="sm" busy={busy === 'rerun'} busyLabel="Running checks…" onClick={rerun}>Run checks</Button></div>}
       </section>
 
+      <RoleSwitch business={b} onChanged={reload} />
       {b.roles.includes('seller') && <ListingSettings business={b} summary={s} />}
 
       <Documents bid={b.bid} key={`docs-${data.checks.length}`} />
