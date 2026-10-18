@@ -681,19 +681,18 @@ cd apps/owner-app && pnpm install && pnpm dev
 
 ## Deployment
 
-`deploy/cloudrun.sh <build-py|suppliers|buyer|owner|refresh|all>` reads `GOOGLE_CLOUD_PROJECT` from `.env` and deploys to `asia-south1`:
-
-1. **build-py.** Cloud Build builds the shared Python image into Artifact Registry.
-2. **suppliers.** It deploys three private supplier services, each with its own service account, and grants `run.invoker` only to the buyer agent's service account.
-3. **buyer.** It deploys the buyer agent with KMS, Model Armor and Vertex settings. Secrets are mounted from Secret Manager.
-4. **owner.** It builds and deploys the Next.js app, then releases Firebase Hosting, which purges the CDN cache.
-5. **refresh.** It sets up a Cloud Run job and a Cloud Scheduler trigger for mandi prices at 11:00 and 19:00 IST. The schedule is paused for now, because data.gov.in returns 403 to cloud IPs (SAUDA-023).
+Everything runs on Google Cloud in `asia-south1`. One script, `deploy/cloudrun.sh`, builds the images with Cloud Build and deploys the buyer agent, the three private supplier agents (each callable only by the buyer agent's service account) and the Next.js app on Cloud Run, then releases Firebase Hosting. Secrets come from Secret Manager; nothing secret is in the repo.
 
 ---
 
 ## Team
 
-**Inertia**, led by **N Chandra Sekhara**.
+Team **Inertia**
+
+| Member | Role | Contact |
+|---|---|---|
+| N Chandra Sekhara | Team lead | chandrasekharabitshyderabad@gmail.com |
+| Akhilesh Kumar | Team member | akhileshnvk@gmail.com · +91 9390031134 |
 
 ## License
 
