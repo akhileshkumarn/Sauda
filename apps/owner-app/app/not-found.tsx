@@ -1,8 +1,23 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
 import { ButtonLink, EmptyState } from '@/components/ui';
+
+export const metadata: Metadata = { title: 'Page not found' };
+
 export default function NotFound() {
   return (
     <div className="narrow">
-      <EmptyState icon="info" title="Page not found" action={<ButtonLink href="/">Go to home</ButtonLink>}>This link does not lead anywhere in Sauda.</EmptyState>
+      <div className="empty-wrap">
+        <EmptyState icon="link" title="This page doesn’t exist"
+          action={
+            <div className="empty-actions">
+              <ButtonLink href="/">Go to home</ButtonLink>
+              <Link className="textlink" href="/trust/latest">See the signed record</Link>
+            </div>
+          }>
+          The link may be old or mistyped. Nothing was ordered or changed by opening it.
+        </EmptyState>
+      </div>
     </div>
   );
 }

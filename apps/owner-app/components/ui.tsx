@@ -217,7 +217,7 @@ export function ErrorState({ error, onRetry, title }: { error: unknown; onRetry?
         <h2 className="row sm" style={{ fontSize: 17 }}><span className="dot bad" aria-hidden />{title || t.title}</h2>
         <p className="small muted break">{t.detail}</p>
       </div>
-      {onRetry && <div><Button variant="secondary" size="sm" icon="refresh" onClick={onRetry}>Try again</Button></div>}
+      {onRetry && <div><Button variant="secondary" icon="refresh" onClick={onRetry}>Try again</Button></div>}
     </div>
   );
 }

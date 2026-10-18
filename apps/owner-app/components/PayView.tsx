@@ -29,6 +29,8 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
   const [utr, setUtr] = useState('');
   const [amt, setAmt] = useState(''); // what the owner actually paid, typed by them (never prefilled)
   const [busy, setBusy] = useState(false);
+  const [utrTouched, setUtrTouched] = useState(false);
+  const [amtTouched, setAmtTouched] = useState(false);
   const inFlight = useRef(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -57,10 +59,10 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
       body: pm ? <>UPI request for <Money paise={pm.amount_paise} /> to {pm.payee_name || name}, payout account on record</> : noPayment ? 'No payment requested until the supplier accepts the order.' : 'Preparing the UPI link.' },
     { key: 'paid', title: 'You reported payment', state: pay === 'claimed' ? 'done' : pay === 'mismatch' ? 'bad' : pm && !cancelled ? 'current' : 'todo',
       meta: pay === 'claimed' ? <StatusPill tone="neutral">Not bank-verified</StatusPill> : undefined,
-      body: pay === 'claimed' ? <>Claimed by you with UTR <span className="mono">{o.utr || '—'}</span>. Sauda has not verified this payment with the bank.</>
+      body: pay === 'claimed' ? <>Reported by you with UTR <span className="mono">{o.utr || '—'}</span>. Sauda has not verified this payment with the bank.</>
         : pay === 'mismatch' ? 'Your report did not match this payment request. This is final for this order: call the supplier to sort it out.'
         : 'After paying in your UPI app, enter the 12-digit UTR below.' },
-    { key: 'del', title: 'Delivery', state: 'na', body: 'Not tracked in this build. Check with the supplier.' },
+    { key: 'del', title: 'Delivery', state: 'na', meta: <StatusPill tone="neutral">Not tracked</StatusPill>, body: 'Sauda does not track delivery yet. Check with the supplier.' },
   ];
 
   async function submit(e: React.FormEvent) {
@@ -82,58 +84,90 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
     finally { setBusy(false); inFlight.current = false; }
   }
 
+  const utrErr = utrTouched && utr.length > 0 && utr.length !== 12
+    ? `A UTR has 12 digits; this has ${utr.length}.`
+    : utrTouched && utr.length === 0 ? 'Enter the 12-digit UTR from your UPI app.' : null;
+  const amtErr = amtTouched && !(paidPaise > 0) ? 'Enter the amount you paid, as shown in your UPI app.' : null;
+  const payable = !!pm && pay !== 'claimed' && pay !== 'mismatch' && !cancelled;
+
   return (
     <div className="stack lg">
       {more > 0 && <Callout tone="info">This restock created {more + 1} orders, one per supplier. <Link href="/orders">See all orders</Link> to pay each one.</Callout>}
-      <div className="row between top">
-        <div className="stack xs grow"><span className="row sm"><span className="strong break" style={{ fontSize: 17 }}>{name}</span><span className="tag">Simulated</span></span><span className="small muted">Order total</span></div>
-        <Money paise={o.total_paise} size="lg" className="none" />
+      <div className="pay-head">
+        <div className="pay-sup">
+          <span className="row sm"><span className="pay-sup-name">{name}</span><span className="tag">Simulated</span></span>
+          <span className="small muted">{o.created_at ? `Ordered ${ist(o.created_at)}` : 'Order'}</span>
+        </div>
+        <div className="pay-tot">
+          <Money paise={o.total_paise} size="lg" />
+          <span className="small muted">Order total</span>
+        </div>
       </div>
 
       {cancelled && <Callout tone="neutral" title="Cancelled.">This order was cancelled. Do not pay it.</Callout>}
 
       {noPayment && <Callout tone="warn" icon="clock" title="Supplier hasn’t accepted the order; no payment requested.">Do not pay yet. Sauda asks for payment only after the supplier accepts the purchase order.</Callout>}
 
-      {pm && pay !== 'claimed' && pay !== 'mismatch' && !cancelled && (
-        <section aria-label="Pay by UPI">
-          <div className="stack lg" style={{ alignItems: 'center', paddingTop: 8 }}>
-                        <div className="stack xs center"><span className="small muted">{demo ? 'Test payment' : 'Amount to pay'}</span><Money paise={pm.amount_paise} size="xl" />
+      {payable && pm && (
+        <section className="pay-card" aria-label="Pay by UPI">
+          <div className="pay-main">
+            <div className="pay-amt">
+              <span className="small muted">{demo ? 'Test payment' : 'Amount to pay'}</span>
+              <Money paise={pm.amount_paise} size="xl" />
               {demo && <span className="small muted">Order total {rupees(orderTotal)}</span>}
-              <span className="small muted">Paid to <span className="mono" style={{ fontSize: 13 }}>{maskVpa(pm.payee_vpa, pm.payout_vpa_masked || pm.payee_vpa_masked || o.payout_vpa_masked)}</span></span></div>
-            {link && <div className="qr" aria-label="UPI QR code"><QRCodeSVG value={link} size={196} level="M" marginSize={0} /></div>}
-            {link && <a className="btn block" href={link}>Open UPI app</a>}
-            <span className="xs faint center">{SETTLEMENT_CAPTION}{demo ? ' Token test amount to a team member’s account on record.' : ''}</span>
+            </div>
+            <span className="pay-to">Paid to <span className="mono" style={{ fontSize: 13 }}>{maskVpa(pm.payee_vpa, pm.payout_vpa_masked || pm.payee_vpa_masked || o.payout_vpa_masked)}</span></span>
+            {link && <div className="pay-actions"><a className="btn block" href={link}><Icon name="upi" size={18} />Open UPI app</a></div>}
+            <p className="pay-caption">{SETTLEMENT_CAPTION}{demo ? ' Token test amount to a team member’s account on record.' : ''}</p>
           </div>
+          {link && <span className="pay-or">or scan</span>}
+          {link && (
+            <div className="pay-qr">
+              <div className="qr" role="img" aria-label="UPI QR code"><QRCodeSVG value={link} size={176} level="M" marginSize={0} /></div>
+              <span className="pay-qr-cap">Scan with any UPI app</span>
+            </div>
+          )}
         </section>
       )}
 
-      {pm && pay !== 'claimed' && pay !== 'mismatch' && !cancelled && (
-        <form className="stack" onSubmit={submit} aria-labelledby="utr-h" style={{ borderTop: '1px solid var(--line)', paddingTop: 20 }}>
+      {payable && (
+        <form className="utr-form" onSubmit={submit} aria-labelledby="utr-h" noValidate style={{ borderTop: '1px solid var(--line)', paddingTop: 20 }}>
           <div className="stack xs">
-            <h2 id="utr-h">Paid? Enter the UTR</h2>
-            <p className="small muted">From your UPI app. Recorded as your claim; not bank-verified.</p>
+            <h2 id="utr-h">Paid? Record it here</h2>
+            <p className="small muted">Enter what your UPI app shows. This is recorded as your claim; Sauda does not check it with the bank.</p>
           </div>
-          <label className="field" htmlFor="paid-amt">Amount you paid
-            <div className="input-affix"><span aria-hidden>₹</span>
-              <input id="paid-amt" className="input num" inputMode="decimal" autoComplete="off" placeholder="as shown in your UPI app" value={amt}
-                onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').slice(0, 10))} />
-            </div>
-          </label>
-          <label className="field" htmlFor="utr">UTR (UPI reference)</label>
-          <input id="utr" className="input mono" inputMode="numeric" autoComplete="off" placeholder="12 digits, e.g. 428917365012" value={utr}
-            onChange={(e) => setUtr(e.target.value.replace(/\D/g, '').slice(0, 12))} aria-invalid={utr.length > 0 && utr.length !== 12} />
+          <div className="utr-grid">
+            <label className="field" htmlFor="paid-amt">Amount you paid
+              <div className="input-affix"><span aria-hidden>₹</span>
+                <input id="paid-amt" className="input num" inputMode="decimal" autoComplete="off" placeholder="0.00" value={amt}
+                  aria-invalid={!!amtErr} aria-describedby="paid-amt-msg" onBlur={() => setAmtTouched(true)}
+                  onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').slice(0, 10))} />
+              </div>
+              <span id="paid-amt-msg" className={`utr-msg ${amtErr ? 'err' : ''}`} aria-live="polite">{amtErr || 'As shown in your UPI app'}</span>
+            </label>
+            <label className="field" htmlFor="utr">UTR (UPI reference)
+              <input id="utr" className="input mono" inputMode="numeric" autoComplete="off" placeholder="12 digits" value={utr}
+                onChange={(e) => setUtr(e.target.value.replace(/\D/g, '').slice(0, 12))} onBlur={() => setUtrTouched(true)}
+                aria-invalid={!!utrErr} aria-describedby="utr-msg" />
+              <span id="utr-msg" className={`utr-msg ${utrErr ? 'err' : ''}`} aria-live="polite">
+                <span>{utrErr || (utr.length === 12 ? 'Looks right' : 'In your UPI app, under transaction details')}</span>
+                <span className="num">{utr.length}/12</span>
+              </span>
+            </label>
+          </div>
           <Button block type="submit" variant="secondary" busy={busy} busyLabel="Checking…" disabled={!/^\d{12}$/.test(utr) || !(paidPaise > 0)}>Record my payment</Button>
         </form>
       )}
       {result && <Callout tone={result.ok ? 'ok' : 'bad'}>{result.text}</Callout>}
 
-      <Card title="Progress">
+      <Card title="Progress" className="pay-tl">
         <Timeline steps={steps} label="Order progress" />
       </Card>
 
-      <div className="row wrap">
-        <Link className="small muted" href={`/savings/${SHOP_ID}`}>Savings</Link>
-        {nid ? <Link className="small muted" href={`/trust/${encodeURIComponent(nid)}`}>Signed record</Link> : <Link className="small muted" href="/orders">All orders</Link>}
+      <div className="pay-links">
+        <Link href="/orders">All orders</Link>
+        <Link href={`/savings/${SHOP_ID}`}>Savings</Link>
+        {nid && <Link href={`/trust/${encodeURIComponent(nid)}`}>Signed record</Link>}
       </div>
 
       <Evidence>

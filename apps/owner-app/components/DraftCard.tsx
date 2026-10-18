@@ -145,7 +145,7 @@ export function DraftEditor({ draft, lines, setLines, readOnly, highlight, title
       ))}
       {unmatched.length > 0 && <span className="small muted">Not in the catalogue: {unmatched.join(', ')}.</span>}
 
-      <ul className="list" style={{ listStyle: 'none', padding: 0, margin: 0 }} aria-label="Restock items">
+      <ul className="list rf-lines" style={{ listStyle: 'none', padding: 0, margin: 0 }} aria-label="Restock items">
         {lines.map((l) => {
           const said = l.requested_qty;
           const inferred = l.qty_source === 'inferred' && !l.applied;
@@ -156,7 +156,7 @@ export function DraftEditor({ draft, lines, setLines, readOnly, highlight, title
           return (
             <li key={l.gtin} data-line className={`li ${highlight?.has(l.gtin) ? 'changed' : ''}`}>
               <div className={`line-row ${readOnly ? 'ro' : ''}`}>
-                <button type="button" className="line-name" style={{ gridArea: 'name' }} aria-expanded={open} onClick={() => setExpanded(open ? null : l.gtin)}>
+                <button type="button" className="line-name" style={{ gridArea: 'name' }} aria-expanded={open} title={cap1(l.name)} onClick={() => setExpanded(open ? null : l.gtin)}>
                   <span className="nm">{cap1(l.name)}</span>
                   {(pack || inferred) && <span className="meta">{[pack, inferred ? 'default qty' : null].filter(Boolean).join(' · ')}</span>}
                 </button>
@@ -171,7 +171,7 @@ export function DraftEditor({ draft, lines, setLines, readOnly, highlight, title
                   )}
                   {!readOnly && l.applied && said != null && <button type="button" className="linkbtn muted" style={{ fontSize: 12.5 }} onClick={() => update(l.gtin, (x) => ({ ...x, qty: clampQty(said), applied: false }))}>Back to {said}</button>}
                 </div>
-                <span className="line-amt" style={{ gridArea: 'amt' }}><Money paise={l.qty * l.ceiling_paise} /></span>
+                <span className="line-amt" style={{ gridArea: 'amt' }} aria-label={`Up to ${rupees(l.qty * l.ceiling_paise)}`}><Money paise={l.qty * l.ceiling_paise} /></span>
                 {!readOnly ? (
                   <LineMenu name={l.name} onReplace={() => setReplacing(replacing === l.gtin ? null : l.gtin)} onRemove={() => remove(l.gtin)} />
                 ) : <span style={{ gridArea: 'more' }} />}
@@ -197,7 +197,13 @@ export function DraftEditor({ draft, lines, setLines, readOnly, highlight, title
         })}
       </ul>
 
-      {lines.length === 0 && !readOnly && <p className="muted center" style={{ padding: '24px 0' }}>No items yet. Say or type your list below.</p>}
+      {lines.length === 0 && !readOnly && (
+        <div className="rf-empty-list">
+          <span className="ico" aria-hidden><Icon name="cart" size={20} /></span>
+          <b>No items yet</b>
+          <span className="small">Say or type your list below, like “10 atta, 20 oil, budget 8000”.</span>
+        </div>
+      )}
 
       {readOnly ? null : adding ? (
         <ProductSearch label="Add an item" onPick={add} onCancel={() => setAdding(false)} exclude={lines.map((l) => l.gtin)} />
@@ -246,13 +252,13 @@ function ChoiceRow({ q, options, current, onPick, onSkip, skipLabel = 'Skip' }: 
   return (
     <div className="ask" role="group" aria-label={q}>
       <span className="ask-q">{q}</span>
-      <div className="chips">
+      <div className="chips rf-chips">
         {options.slice(0, 4).map((o) => (
           <button type="button" key={o.gtin} className="chip-btn" aria-pressed={o.gtin === current} onClick={() => onPick(o)}>
-            {o.gtin === current ? '✓ ' : ''}{refLabel(o)}
+            {o.gtin === current ? <Icon name="check" size={14} /> : null}{refLabel(o)}
           </button>
         ))}
-        <button type="button" className="chip-btn" style={{ color: 'var(--ink-2)', borderColor: 'transparent' }} onClick={onSkip}>{skipLabel}</button>
+        <button type="button" className="chip-btn rf-skip" onClick={onSkip}>{skipLabel}</button>
       </div>
     </div>
   );

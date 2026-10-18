@@ -7,7 +7,7 @@ import { relTime } from '@/lib/format';
 import { useAsync } from '@/lib/useAsync';
 import type { SessionSummary } from '@/lib/types';
 import { sessionLabel } from '../status';
-import { Button, Callout, EmptyState, ErrorState, Icon, Money, PageHead, Skeleton, StatusPill } from '../ui';
+import { Button, Callout, EmptyState, ErrorState, Icon, Money, PageHead, StatusPill } from '../ui';
 
 /** "New restock": always creates a new session; never reuses or overwrites an existing one. */
 export function NewRestockButton({ block = true, variant }: { block?: boolean; variant?: 'secondary' }) {
@@ -34,14 +34,15 @@ export function SessionRow({ r }: { r: SessionSummary }) {
   const st = sessionLabel(r.status);
   const attention = r.needs_attention && r.status !== 'awaiting_approval';
   return (
-    <Link href={`/restock/${encodeURIComponent(r.sid)}`} className="li sess-row">
-      <div className="grow stack xs">
-        <span className="strong ellipsis">{r.title || 'Untitled restock'}</span>
+    <Link href={`/restock/${encodeURIComponent(r.sid)}`} className="li sess-row rf-sess">
+      <div className="stack xs" style={{ minWidth: 0 }}>
+        <span className="strong ellipsis" title={r.title || undefined}>{r.title || 'Untitled restock'}</span>
         <span className="small muted num row sm wrap" style={{ rowGap: 0 }}>
           <StatusPill tone={attention ? 'warn' : st.tone}>{attention ? 'Needs a look' : st.label}</StatusPill>
-          <span>{r.line_count} {r.line_count === 1 ? 'item' : 'items'}{money ? <> · {r.total_paise ? '' : 'up to '}<Money paise={money} whole /></> : null} · {relTime(r.updated_at)}</span>
+          <span>{r.line_count} {r.line_count === 1 ? 'item' : 'items'} · {relTime(r.updated_at)}</span>
         </span>
       </div>
+      <span className="amt">{money ? <><Money paise={money} whole /><small>{r.total_paise ? 'total' : 'up to'}</small></> : null}</span>
       <span className="chev-ico"><Icon name="chev" size={16} /></span>
     </Link>
   );
@@ -55,10 +56,14 @@ export function SessionList() {
     <div className="stack lg">
       <PageHead title="Restocks" />
       <NewRestockButton />
-      {loading && !data && <Skeleton lines={5} />}
+      {loading && !data && (
+        <div className="rf-skel-rows" aria-busy="true" aria-label="Loading your restocks">
+          {[62, 48, 56, 40].map((w) => <div key={w} className="rf-skel-row" style={{ minHeight: 64 }}><div className="stack xs"><div className="skeleton" style={{ width: `${w}%` }} /><div className="skeleton rf-sm" /></div><div className="skeleton" /></div>)}
+        </div>
+      )}
       {error && !data ? <ErrorState error={error} onRetry={reload} title="Could not load your restocks" /> : null}
       {data && data.length === 0 && (
-        <EmptyState icon="cart" title="No restocks yet">Say or type what you need, like “10 atta 5 kg, 20 sunflower oil”.</EmptyState>
+        <EmptyState icon="cart" title="No restocks yet">Tap New restock, then say or type what you need, like “10 atta 5 kg, 20 sunflower oil”.</EmptyState>
       )}
       {data && data.length > 0 && (
         <div className="stack sm">
@@ -67,7 +72,7 @@ export function SessionList() {
           {rows.length === 0 && <p className="small muted">No restock matches “{q}”.</p>}
         </div>
       )}
-      <p className="xs muted row sm"><Icon name="lock" size={12} />Only you see these. Nothing is bought until you approve.</p>
+      <p className="xs muted row sm" style={{ gap: 6 }}><Icon name="lock" size={12} />Only you see these. Nothing is bought until you approve.</p>
     </div>
   );
 }

@@ -272,7 +272,7 @@ export function SessionView({ sid }: { sid: string }) {
       </div>
     );
   }
-  if (!s) return <div className="stack lg"><Skeleton lines={2} /><Skeleton lines={6} /></div>;
+  if (!s) return <SessionSkeleton />;
 
   const editable = EDITABLE_STATUSES.has(s.status);
   const draft = toDraft(s, prep);
@@ -285,12 +285,19 @@ export function SessionView({ sid }: { sid: string }) {
   // The same question is already shown under its line; don't repeat it above the composer.
   const clarOnLine = !!clar && draftClar.some((c) => c.question === clar.question || (!!clar.gtin && c.gtin === clar.gtin && lines.some((l) => l.gtin === c.gtin)));
   const sauda = inflight > 0 ? null : clar && showReply?.endsWith(clar.question) ? showReply.slice(0, -clar.question.length).trim() || showReply : showReply;
+  const budget = draft.stated_budget_paise || 0;
+  const overBudget = budget > 0 && atCeiling > budget;
+  const jumpToQuestion = () => {
+    const el = document.querySelector<HTMLElement>('.rf-lines .ask');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  };
 
   return (
     <div className="stack lg" style={{ flex: 1 }}>
       <div className="stack sm">
         <div className="row between sm">
-          <Link href="/restock" className="small muted row sm" style={{ gap: 4, minHeight: 32 }}><span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><Icon name="chev" size={14} /></span>Restocks</Link>
+          <Link href="/restock" className="rf-back"><span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><Icon name="chev" size={14} /></span>Restocks</Link>
           <div className="row sm">
             {editable && <SaveIndicator state={save} onRetry={() => { dirty.current = true; void doSave(); }} />}
             <SessionPill status={s.status} />
@@ -302,7 +309,7 @@ export function SessionView({ sid }: { sid: string }) {
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setTitleText(s.title); (e.target as HTMLInputElement).blur(); } }} />
       </div>
 
-      {notice && <Callout tone="warn">{notice} <button type="button" className="linkbtn" onClick={() => setNotice(null)}>OK</button></Callout>}
+      {notice && <Callout tone="warn">{notice} <button type="button" className="linkbtn rf-tap" style={{ minHeight: 32 }} onClick={() => setNotice(null)}>OK</button></Callout>}
 
       {!editable && <LockedStatus s={s} />}
 
@@ -332,8 +339,8 @@ export function SessionView({ sid }: { sid: string }) {
       )}
 
       {editable && !reviewing && (
-        <div>
-          <button type="button" className="linkbtn muted" style={{ minHeight: 44 }} onClick={() => setArming(true)}>Cancel this restock</button>
+        <div className="rf-cancel">
+          <button type="button" className="linkbtn muted rf-tap" onClick={() => setArming(true)}>Cancel this restock</button>
           <Sheet open={arming} onClose={() => !busyAct && setArming(false)} title="Cancel this restock?">
             <p className="muted">It stays in your history as cancelled. Nothing has been signed or ordered.</p>
             <Button variant="danger-solid" block busy={busyAct} busyLabel="Cancelling…" onClick={cancel}>Cancel restock</Button>
@@ -349,26 +356,30 @@ export function SessionView({ sid }: { sid: string }) {
       {dbg && <LatencyPanel />}
 
       {editable && !reviewing && (
-        <form className="dock" onSubmit={(e) => { e.preventDefault(); sendTyped(); }}>
-          {inflight > 0 && <span className="toast-line" role="status"><span className="spinner" aria-hidden style={{ marginTop: 2 }} />Updating the list…</span>}
-          {sauda && (
-            <div className="toast-line" role="status" aria-live="polite">
-              <span className="s" aria-hidden>S</span>
+        <form className="dock rf-dock" aria-label="Change the list" onSubmit={(e) => { e.preventDefault(); sendTyped(); }}>
+          <div className="sr-only" role="status" aria-live="polite">{inflight > 0 ? 'Updating the list…' : sauda || ''}</div>
+          {inflight > 0 ? (
+            <div className="rf-toast busy" aria-hidden><span className="spinner" />Updating the list…</div>
+          ) : sauda ? (
+            <div className="rf-toast" key={sauda} aria-hidden>
+              <span className="s">S</span>
               <span className="grow clamp2">{sauda}</span>
             </div>
-          )}
+          ) : null}
           {clar && !clarOnLine && (
             <div className="ask" role="group" aria-label={clar.question} style={{ paddingTop: 0 }}>
               <span className="ask-q clamp2">{clar.question}</span>
               <div className="chips">
                 {clar.options.slice(0, 4).map((o, i) => (
-                  <button type="button" key={typeof o === 'string' ? o : o.gtin || i} className="chip-btn" onClick={() => pickClar(o, clar.owner_words)}>{optLabel(o)}</button>
+                  <button type="button" key={typeof o === 'string' ? o : o.gtin || i} className="chip-btn" disabled={inflight > 0} onClick={() => pickClar(o, clar.owner_words)}>{optLabel(o)}</button>
                 ))}
-                <button type="button" className="chip-btn" style={{ color: 'var(--ink-2)', borderColor: 'transparent' }} onClick={() => setClar(null)}>Skip</button>
+                <button type="button" className="chip-btn rf-skip" onClick={() => setClar(null)}>Skip</button>
               </div>
             </div>
           )}
-          {!clar && draftClar.length > 0 && <span className="xs muted">Sauda has a question on the list above.</span>}
+          {!clar && draftClar.length > 0 && (
+            <button type="button" className="rf-qhint" onClick={jumpToQuestion}><span className="dot" aria-hidden /><span>Sauda has a question on the list above</span></button>
+          )}
           {lowConf && <LowConfidence text={lowConf.text} onSend={(t) => sendTurn(t, 'voice', lowConf.utt)} onDrop={() => setLowConf(null)} />}
           {turnErr && (
             <Callout tone="warn" title="Not applied yet.">
@@ -382,11 +393,14 @@ export function SessionView({ sid }: { sid: string }) {
           {prepErr && <Callout tone="warn">{prepErr}</Callout>}
           <div ref={setTopSlot} />
           {lines.length > 0 && (
-            <div className="summary">
-              <span className="sum-text">
-                <b>{lines.length} {lines.length === 1 ? 'item' : 'items'}</b> · up to <b><Money paise={atCeiling} whole /></b>
-                {draft.stated_budget_paise ? <> · budget <Money paise={draft.stated_budget_paise} whole /></> : null}
-              </span>
+            <div className="summary rf-summary">
+              <div className="rf-sum">
+                <span className="rf-sum-total"><span className="sr-only">Up to </span><Money paise={atCeiling} whole /></span>
+                <span className="rf-sum-meta">
+                  at most · {lines.length} {lines.length === 1 ? 'item' : 'items'}
+                  {budget ? <> · <span className={overBudget ? 'over' : undefined}>budget <Money paise={budget} whole />{overBudget ? ' (over)' : ''}</span></> : null}
+                </span>
+              </div>
               <Button busy={prepBusy} busyLabel="Preparing…" disabled={!lines.length || inflight > 0} onClick={startReview} title="Nothing is signed or bought until you choose to">Review limits</Button>
             </div>
           )}
@@ -406,9 +420,20 @@ export function SessionView({ sid }: { sid: string }) {
   );
 }
 
+function SessionSkeleton() {
+  return (
+    <div className="rf-skel" aria-busy="true" aria-label="Loading this restock">
+      <div className="stack sm"><div className="skeleton rf-sm" /><div className="skeleton rf-h1" /></div>
+      <div className="rf-skel-rows">
+        {[78, 64, 70, 52].map((w) => <div key={w} className="rf-skel-row"><div className="skeleton" style={{ width: `${w}%` }} /><div className="skeleton" /></div>)}
+      </div>
+    </div>
+  );
+}
+
 function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   if (state === 'idle') return null;
-  if (state === 'error') return <span className="save-ind err" role="alert"><Icon name="alert" size={12} />Couldn’t save · <button type="button" className="btn ghost sm" style={{ minHeight: 24, padding: '0 6px' }} onClick={onRetry}>Retry</button></span>;
+  if (state === 'error') return <span className="save-ind err" role="alert"><Icon name="alert" size={12} />Couldn’t save · <button type="button" className="btn ghost sm" style={{ minHeight: 44, padding: '0 8px', color: 'var(--bad)' }} onClick={onRetry}>Retry</button></span>;
   if (state === 'saved') return <span className="save-ind ok" role="status">Saved</span>;
   return <span className="save-ind" role="status">Saving…</span>;
 }

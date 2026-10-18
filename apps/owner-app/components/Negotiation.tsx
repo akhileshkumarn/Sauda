@@ -110,18 +110,36 @@ const KIND: Record<Kind, { tone: Tone; label: string; cls: string; icon: string 
   unverified: { tone: 'bad', label: 'Not verified', cls: 'bad', icon: 'shieldx' },
 };
 
+const isOut = (k: Kind) => k === 'blocked' || k === 'quarantined' || k === 'unverified' || k === 'down';
+const latestTotal = (sup: SupplierState) => { const q = sup.quotes[sup.quotes.length - 1]; return q?.total ?? null; };
+
 export function NegotiationPanel({ s }: { s: NegState }) {
   const cur = s.done ? MAX_ROUNDS + 1 : Math.max(1, s.round);
   const ids = s.order;
+  // Lowest latest quote among suppliers whose offer is still in play.
+  let bestId: string | null = null;
+  for (const id of ids) {
+    const sup = s.suppliers[id];
+    const t = latestTotal(sup);
+    if (t == null || isOut(kindOf(sup))) continue;
+    if (bestId == null || t < (latestTotal(s.suppliers[bestId]) ?? Infinity)) bestId = id;
+  }
+  const quoted = ids.filter((id) => s.suppliers[id].quotes.length > 0).length;
+  const best = bestId ? s.suppliers[bestId] : null;
+  const bestT = best ? latestTotal(best) : null;
+  const progress = s.done ? `Finished after ${s.round} ${s.round === 1 ? 'round' : 'rounds'}` : `Round ${Math.max(1, s.round)} of ${MAX_ROUNDS}`;
   return (
-    <section className="stack" style={{ alignSelf: 'stretch' }} aria-labelledby="neg-h" aria-live="polite">
-      <div className="row between wrap">
-        <div className="stack xs">
-          <h2 id="neg-h">Comparing and negotiating</h2>
-          <span className="small muted">{s.done ? `Finished after ${s.round} ${s.round === 1 ? 'round' : 'rounds'}` : `Round ${Math.max(1, s.round)} of ${MAX_ROUNDS}`} · {ids.length} {ids.length === 1 ? 'supplier' : 'suppliers'}</span>
+    <section className="stack" style={{ alignSelf: 'stretch' }} aria-labelledby="neg-h">
+      <div className="rf-neg-head">
+        <div className="stack xs" style={{ minWidth: 0 }}>
+          <h2 id="neg-h">Comparing suppliers</h2>
+          <span className="small muted num">{progress} · {quoted} of {ids.length} quoted</span>
         </div>
         {s.done ? <StatusPill tone="ok">Done</StatusPill> : <StatusPill tone="accent">Live</StatusPill>}
       </div>
+      <p className="sr-only" role="status" aria-live="polite">
+        {progress}. {best && bestT != null ? `Lowest offer so far: ${best.name}, ${rupees(bestT, true)}.` : 'Waiting for quotes.'}
+      </p>
       <ol className="rounds" aria-label="Rounds">
         {Array.from({ length: MAX_ROUNDS }).map((_, i) => {
           const r = i + 1;
@@ -134,15 +152,15 @@ export function NegotiationPanel({ s }: { s: NegState }) {
           );
         })}
       </ol>
-      <div className="suppliers">
-        {ids.map((id) => <SupplierCard key={id} sup={s.suppliers[id]} maxAdvance={s.maxAdvance} />)}
+      <div className="rf-sups">
+        {ids.map((id) => <SupplierCard key={id} sup={s.suppliers[id]} maxAdvance={s.maxAdvance} best={id === bestId && ids.length > 1} />)}
       </div>
       <p className="xs faint">Simulated suppliers. Their messages are read as data, never as instructions.</p>
     </section>
   );
 }
 
-function SupplierCard({ sup, maxAdvance }: { sup: SupplierState; maxAdvance: number | null }) {
+function SupplierCard({ sup, maxAdvance, best }: { sup: SupplierState; maxAdvance: number | null; best?: boolean }) {
   const k = kindOf(sup);
   const meta = KIND[k];
   const first = sup.quotes[0];
@@ -152,35 +170,42 @@ function SupplierCard({ sup, maxAdvance }: { sup: SupplierState; maxAdvance: num
   const why = reasons.map((c) => reasonText(c, { supplier: sup.name, advance: last?.advance, maxAdvance }));
   const dropped = first && last && first.total && last.total && last.total < first.total ? first.total - last.total : 0;
   const blockedish = k === 'blocked' || k === 'quarantined' || k === 'unverified';
+  const changed = !!first && !!last && sup.quotes.length > 1 && first.total != null && last.total != null && first.total !== last.total;
+  const terms = last ? [last.advance != null ? `${last.advance}% advance` : null, last.delivery != null ? `${last.delivery} ${last.delivery === 1 ? 'day' : 'days'} delivery` : null, sup.quotes.length > 1 ? `round ${last.round}` : null].filter(Boolean).join(' · ') : '';
+  const plain = blockedish && why.length > 0 ? why[0]
+    : k === 'unverified' ? 'Not in the supplier registry, so Sauda did not contact it'
+    : k === 'down' ? 'Did not respond in time. Sauda carried on with the others'
+    : null;
+  const sub = k === 'quarantined' ? `Sauda stopped talking to ${sup.name} for this restock.` : k === 'approval' ? 'Allowed, but check the cart before approving.' : null;
   return (
-    <article className="sup" aria-label={`${sup.name}: ${meta.label}`}>
-      <div className="row between top">
-        <div className="stack xs grow">
-          <span className="row sm"><span className="strong break">{sup.name}</span><span className="tag">Simulated</span></span>
+    <article className={`rf-sup ${isOut(k) ? 'out' : ''}`} aria-label={`${sup.name}: ${meta.label}`}>
+      <div className="rf-sup-main">
+        <div className="rf-sup-id">
+          <span className="rf-sup-name"><span className="strong" title={sup.name}>{sup.name}</span>{best ? <span className="rf-best">Lowest</span> : <span className="tag">Simulated</span>}</span>
           <StatusPill tone={meta.tone}>{meta.label}{sup.verified === true && !blockedish ? ' · registered' : ''}</StatusPill>
         </div>
-        {first && first.total != null && (
-          <div className="right none stack xs">
-            {sup.quotes.length > 1 && last.total != null ? (
-              <>
-                <span className="small strike num"><Money paise={first.total} whole /></span>
-                <Money paise={last.total} whole className="strong" />
-              </>
-            ) : <Money paise={first.total} whole className={blockedish ? 'strike' : 'strong'} />}
-          </div>
-        )}
+        <div className="rf-price">
+          {last && last.total != null ? (
+            <>
+              <span key={last.total} className={`now ${sup.quotes.length > 1 ? 'tick' : ''}`} style={blockedish ? { textDecoration: 'line-through', color: 'var(--ink-2)' } : undefined}>
+                <Money paise={last.total} whole />
+              </span>
+              {changed ? (
+                <span className="was"><span className="sr-only">opened at </span><s><Money paise={first.total} whole /></s>{dropped > 0 && !blockedish ? <span className="drop"> −{rupees(dropped, true)}</span> : null}</span>
+              ) : (
+                <span className="was">{blockedish ? 'not used' : 'opening quote'}</span>
+              )}
+            </>
+          ) : k === 'waiting' ? (
+            <><span className="skeleton" aria-hidden /><span className="was">waiting</span></>
+          ) : <span className="was">no quote</span>}
+        </div>
       </div>
-      {first && (last.advance != null || last.delivery != null) && (
-        <span className="small muted">
-          {[last.advance != null ? `${last.advance}% advance` : null, last.delivery != null ? `${last.delivery} ${last.delivery === 1 ? 'day' : 'days'} delivery` : null, sup.quotes.length > 1 ? `round ${last.round}` : null].filter(Boolean).join(' · ')}
-          {dropped > 0 && k === 'allowed' ? ` · down ${rupees(dropped)}` : ''}
-        </span>
+      {terms && <span className="rf-sup-terms">{terms}</span>}
+      {plain && (
+        <span className="rf-reason"><span className={`dot ${blockedish ? 'bad' : 'neutral'}`} aria-hidden /><span>{plain}.{sub ? <span className="sub"> {sub}</span> : null}</span></span>
       )}
-      {blockedish && why.length > 0 && <span className="small" style={{ color: 'var(--ink)' }}>{why[0]}.</span>}
-      {k === 'quarantined' && <span className="small muted">Sauda stopped talking to {sup.name} for this restock.</span>}
-      {k === 'unverified' && <span className="small muted">Not in the registry, so Sauda did not contact it.</span>}
-      {k === 'down' && <span className="small muted">Did not respond in time. Sauda carried on with the others.</span>}
-      {k === 'approval' && <span className="small muted">Allowed, but check the cart before approving.</span>}
+      {!plain && sub && <span className="small muted">{sub}</span>}
       {(sup.gates.length > 0 || reasons.length > 0) && (
         <Evidence>
           {why.length > 1 && <ul className="stack xs" style={{ paddingLeft: 16 }}>{why.map((w) => <li key={w}>{w}</li>)}</ul>}

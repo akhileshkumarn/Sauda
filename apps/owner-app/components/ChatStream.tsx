@@ -117,10 +117,12 @@ export function ChatStream({ runMandateId }: { runMandateId?: string }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const started = useRef(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastSent = useRef<{ message: string; mandate_id?: string; display?: string } | null>(null);
 
   const send = useCallback(async (message: string, mandate_id?: string, display?: string) => {
     if (!message.trim() || busyRef.current) return;
     busyRef.current = true;
+    lastSent.current = { message, mandate_id, display };
     abort.current?.abort();
     const ac = new AbortController(); abort.current = ac;
     setBusy(true); setInput('');
@@ -184,7 +186,8 @@ export function ChatStream({ runMandateId }: { runMandateId?: string }) {
       )}
 
       <div className="chat" aria-live="polite" aria-relevant="additions">
-        {items.map((it, i) => <ItemView key={i} it={it} neg={neg} stale={it.k === 'draft' && i !== lastDraftIdx} busy={busy} onRetry={send} />)}
+        {items.map((it, i) => <ItemView key={i} it={it} neg={neg} stale={it.k === 'draft' && i !== lastDraftIdx} busy={busy} onRetry={send}
+          onRetryLast={i === items.length - 1 && lastSent.current ? () => { const l = lastSent.current!; void send(l.message, l.mandate_id, l.display); } : undefined} />)}
         {busy && <div className="event-line" role="status"><span className="spinner" aria-hidden /> Sauda is working…</div>}
         <div ref={endRef} />
       </div>
@@ -208,7 +211,7 @@ export function ChatStream({ runMandateId }: { runMandateId?: string }) {
   );
 }
 
-function ItemView({ it, neg, stale, busy, onRetry }: { it: Item; neg: NegState; stale: boolean; busy: boolean; onRetry: (m: string, mandate?: string) => void }) {
+function ItemView({ it, neg, stale, busy, onRetry, onRetryLast }: { it: Item; neg: NegState; stale: boolean; busy: boolean; onRetry: (m: string, mandate?: string) => void; onRetryLast?: () => void }) {
   switch (it.k) {
     case 'busy':
       return (
@@ -249,9 +252,13 @@ function ItemView({ it, neg, stale, busy, onRetry }: { it: Item; neg: NegState; 
     }
     case 'confirm':
       return (
-        <Card tone="warn" title={<span className="row sm"><Icon name="alert" size={18} />Your approval is needed</span>} subtitle="The cart is ready. Check every line, the supplier and the payment terms on one screen.">
-          <ButtonLink href={`/confirm/${encodeURIComponent(it.confirmation_id)}`} block icon="arrow">Review cart and approve</ButtonLink>
-        </Card>
+        <section className="rf-cta" aria-labelledby={`cta-${it.confirmation_id}`}>
+          <div className="stack xs">
+            <h2 id={`cta-${it.confirmation_id}`}><span className="dot" aria-hidden />Your approval is needed</h2>
+            <p>The cart is ready. Check every line, the supplier and the payment terms on one screen.</p>
+          </div>
+          <ButtonLink href={`/confirm/${encodeURIComponent(it.confirmation_id)}`} block>Review cart and approve</ButtonLink>
+        </section>
       );
     case 'done':
       return (
@@ -266,6 +273,7 @@ function ItemView({ it, neg, stale, busy, onRetry }: { it: Item; neg: NegState; 
           <Callout tone="bad" title={it.code === 'NETWORK' ? 'Connection lost.' : 'Sauda could not finish.'}>
             {it.code === 'NETWORK' ? 'Check your internet and send your message again. Nothing was ordered.' : `${it.message}. Nothing was ordered; you can try again.`}
           </Callout>
+          {onRetryLast && <div><Button size="sm" variant="secondary" icon="refresh" disabled={busy} onClick={onRetryLast}>Try again</Button></div>}
           <Evidence><span className="mono">{maskVpasIn(`${it.code}: ${it.message}`)}</span></Evidence>
         </div>
       );

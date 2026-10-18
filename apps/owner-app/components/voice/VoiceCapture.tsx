@@ -96,16 +96,16 @@ export function VoiceControl({ onFinal, disabled, onTypeInstead, slots }: VoiceC
         {state === 'listening' ? 'Listening. Microphone is on.' : state === 'paused' ? 'Paused. Microphone is off.' : state === 'starting' ? 'Starting the microphone…' : ''}
       </div>
       {on && (
-        <div className="live-line">
-          <span className="live-dot" aria-hidden />
-          <span className="wave" aria-hidden>{bars.map((k, i) => <i key={i} style={{ height: `${Math.max(3, Math.round(16 * Math.min(1, level * 1.6) * k))}px` }} />)}</span>
-          <span className="grow ellipsis" aria-live="off" lang={lang.slice(0, 2)}>
-            {state === 'starting' ? <span className="muted">Starting…</span> : partial ? <>“{partial}”</> : <span className="muted">Listening… each sentence is added as you finish it</span>}
+        <div className="rf-live">
+          {state === 'starting' ? <span className="spinner" aria-hidden style={{ color: 'var(--ink-2)' }} /> : <span className="live-dot" aria-hidden />}
+          {state !== 'starting' && <span className="wave" aria-hidden>{bars.map((k, i) => <i key={i} style={{ height: `${Math.max(3, Math.round(16 * Math.min(1, level * 1.6) * k))}px` }} />)}</span>}
+          <span className="rf-partial clamp2" aria-live="off" lang={lang.slice(0, 2)}>
+            {state === 'starting' ? <span className="muted">Starting the microphone…</span> : partial ? <>“{partial.length > 110 ? `…${partial.slice(-110)}` : partial}”</> : <span className="muted">Listening. Each sentence is added when you finish it.</span>}
           </span>
-          <button type="button" className="linkbtn muted" onClick={pause}>Pause</button>
+          <button type="button" className="rf-pause" onClick={pause}>Pause</button>
         </div>
       )}
-      {busy > 0 && <span className="xs muted row sm"><span className="spinner" aria-hidden /> Transcribing{busy > 1 ? ` ${busy} parts` : ''}…</span>}
+      {busy > 0 && <span className="rf-proc" role="status"><span className="spinner" aria-hidden />Working out what you said{busy > 1 ? ` (${busy} parts)` : ''}…</span>}
       {err && <VoiceError err={err} canFallback={useEngine === 'webspeech' && recorderSupported()}
         onRetry={start}
         onFallback={() => { setForceRecorder(true); setErr(null); }}

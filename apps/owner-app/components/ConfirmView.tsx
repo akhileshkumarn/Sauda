@@ -7,7 +7,7 @@ import { rememberNegotiation } from '@/lib/session';
 import { useAsync } from '@/lib/useAsync';
 import type { Allocation, Confirmation } from '@/lib/types';
 import { GateReport } from './GateReport';
-import { Button, ButtonLink, Callout, ErrorState, Evidence, Meter, Money, SETTLEMENT_CAPTION, Skeleton, StatusPill } from './ui';
+import { Button, ButtonLink, Callout, ErrorState, Evidence, Icon, Meter, Money, SETTLEMENT_CAPTION, StatusPill } from './ui';
 
 function SupplierBlock({ a, why }: { a: Allocation; why: Confirmation['cart']['why'] }) {
   const name = supplierName(a.supplier_id, a.supplier_name);
@@ -15,29 +15,31 @@ function SupplierBlock({ a, why }: { a: Allocation; why: Confirmation['cart']['w
   const reasons = a.lines.map((l) => ({ l, w: why?.find((x) => x.gtin === l.gtin && x.supplier_id === a.supplier_id) }));
   return (
     <section className="stack sm" aria-label={name}>
-      <div className="section-h" style={{ marginBottom: 0 }}>
-        <h2 className="row sm" style={{ color: 'var(--ink)', fontSize: 15 }}><span className="break">{name}</span><span className="tag">Simulated</span></h2>
-        <Money paise={a.subtotal_paise} className="strong" />
+      <div className="rf-sup-h">
+        <h2><span title={name}>{name}</span><span className="tag">Simulated</span></h2>
+        <Money paise={a.subtotal_paise} className="strong rf-num" />
       </div>
-      <ul className="list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+      <ul className="rf-items">
         {a.lines.map((l) => {
           const under = l.unit_price_paise <= l.ceiling_paise;
+          const opened = l.opening_price_paise && l.opening_price_paise > l.unit_price_paise ? l.opening_price_paise : null;
           return (
-            <li key={l.gtin} className="li row between top">
-              <div className="grow stack xs">
-                <span className="break">{cap1(l.name)}</span>
-                <span className="small muted num">{l.qty.toLocaleString('en-IN')} × {rupees(l.unit_price_paise)}
-                  {l.opening_price_paise && l.opening_price_paise > l.unit_price_paise ? <> <span className="strike">{rupees(l.opening_price_paise)}</span></> : null}
-                  {!under && <> · <StatusPill tone="bad">Over ceiling {rupees(l.ceiling_paise)}</StatusPill></>}
-                </span>
-              </div>
-              <Money paise={l.qty * l.unit_price_paise} className="none" />
+            <li key={l.gtin} className="rf-item">
+              <span className="nm rf-clamp" title={cap1(l.name)}>{cap1(l.name)}</span>
+              <Money paise={l.qty * l.unit_price_paise} className="amt rf-num" />
+              <span className="meta">
+                <span>{l.qty.toLocaleString('en-IN')} × {rupees(l.unit_price_paise)}</span>
+                {opened ? <span><span className="sr-only">opened at </span><span className="strike">{rupees(opened)}</span></span> : null}
+                {!under && <StatusPill tone="bad">Over ceiling {rupees(l.ceiling_paise)}</StatusPill>}
+              </span>
             </li>
           );
         })}
       </ul>
-      <span className="small muted">
-        Paid to <span className="mono" style={{ fontSize: 13 }}>{maskVpa(a.payee_vpa, a.payout_vpa_masked)}</span> · {a.delivery_days != null ? `delivery in ${a.delivery_days} ${a.delivery_days === 1 ? 'day' : 'days'}` : 'delivery not stated'} · {a.advance_pct ? <>{a.advance_pct}% advance (<Money paise={adv} />)</> : 'no advance'}
+      <span className="rf-terms">
+        <span>Paid to <span className="mono" style={{ fontSize: 13 }}>{maskVpa(a.payee_vpa, a.payout_vpa_masked)}</span></span>
+        <span>· {a.delivery_days != null ? `delivery in ${a.delivery_days} ${a.delivery_days === 1 ? 'day' : 'days'}` : 'delivery not stated'}</span>
+        <span>· {a.advance_pct ? <>{a.advance_pct}% advance (<Money paise={adv} />)</> : 'no advance'}</span>
       </span>
       <Evidence label="Why this supplier">
         <div className="row sm"><StatusPill tone="ok">Registered supplier</StatusPill><span>· payout account on record</span></div>
@@ -51,6 +53,15 @@ function SupplierBlock({ a, why }: { a: Allocation; why: Confirmation['cart']['w
   );
 }
 
+function ConfirmSkeleton() {
+  return (
+    <div className="rf-skel" aria-busy="true" aria-label="Loading the cart">
+      <div className="stack sm"><div className="skeleton rf-sm" /><div className="skeleton rf-hero" /><div className="skeleton" style={{ height: 6, width: '70%' }} /></div>
+      <div className="rf-skel-rows">{[72, 60, 66, 54].map((w) => <div key={w} className="rf-skel-row"><div className="skeleton" style={{ width: `${w}%` }} /><div className="skeleton" /></div>)}</div>
+    </div>
+  );
+}
+
 export function ConfirmView({ id }: { id: string }) {
   const router = useRouter();
   const { data: c, error, loading, reload } = useAsync(() => getConfirmation(id), [id]);
@@ -59,8 +70,9 @@ export function ConfirmView({ id }: { id: string }) {
   const [err, setErr] = useState<{ title: string; body: string; reload?: boolean } | null>(null);
   const [declined, setDeclined] = useState(false);
   const [placed, setPlaced] = useState(false);
+  const [askDecline, setAskDecline] = useState(false);
 
-  if (loading && !c) return <Skeleton lines={8} />;
+  if (loading && !c) return <ConfirmSkeleton />;
   if (error || !c) return <ErrorState error={error} onRetry={reload} title="Could not load the cart" />;
 
   const gate = c.gate_report || { action: 'place_order', verdict: 'CONFIRM', results: [] };
@@ -94,19 +106,25 @@ export function ConfirmView({ id }: { id: string }) {
     } finally { setBusy(null); inFlight.current = false; }
   }
 
+  const over = budget > 0 && c.cart.total_paise > budget;
+  const failedN = denied.length;
   const summary = (
-    <section className="stack sm" aria-label="Order total">
+    <section className="rf-total" aria-label="Order total">
       <span className="small muted">Order total</span>
       <Money paise={c.cart.total_paise} size="xl" />
       {budget > 0 && (
-        <div className="stack xs" style={{ maxWidth: 360 }}>
+        <div className="rf-budgetbar">
           <Meter value={c.cart.total_paise} max={budget} label="Budget used" />
-          <span className="small muted num">{rupees(c.cart.total_paise, true)} of {rupees(budget, true)} budget</span>
+          <div className="row">
+            <span>{Math.min(999, Math.round((c.cart.total_paise / budget) * 100))}% of {rupees(budget, true)} budget</span>
+            <span style={over ? { color: 'var(--bad)' } : undefined}>{over ? `${rupees(c.cart.total_paise - budget, true)} over` : `${rupees(budget - c.cart.total_paise, true)} left`}</span>
+          </div>
         </div>
       )}
       {c.cart.savings_paise > 0 && (
-        <span className="small muted" title={`Opening quotes totalled ${rupees(opening)} for the same items (simulated suppliers).`}>
-          <b style={{ color: 'var(--ink)', fontWeight: 550 }}><Money paise={c.cart.savings_paise} whole /></b> below opening quotes{typeof c.cart.savings_pct === 'number' ? ` (${c.cart.savings_pct}%)` : ''}
+        <span className="rf-save" title={`Opening quotes totalled ${rupees(opening)} for the same items (simulated suppliers).`}>
+          <Icon name="check" size={14} />
+          <span><b style={{ fontWeight: 600 }}><Money paise={c.cart.savings_paise} whole /></b> below opening quotes{typeof c.cart.savings_pct === 'number' ? ` (${c.cart.savings_pct}%)` : ''}</span>
         </span>
       )}
       {c.expires_at && open && <span className="small muted">Decide by {ist(c.expires_at)}</span>}
@@ -121,9 +139,9 @@ export function ConfirmView({ id }: { id: string }) {
       {summary}
       <div className="stack lg">
           {c.cart.blocked_suppliers?.map((b) => (
-            <div key={b.supplier_id} className="stack xs">
-              <span className="row sm"><StatusPill tone="bad">{supplierName(b.supplier_id)} was blocked and is not in this cart.</StatusPill></span>
-              <Evidence label="Why">{b.reason_codes.map((r) => reasonText(r, { supplier: supplierName(b.supplier_id) })).join('. ')}.</Evidence>
+            <div key={b.supplier_id} className="rf-blocked" role="note">
+              <span><b>{supplierName(b.supplier_id)} was blocked</b> and is not in this cart.</span>
+              <span className="muted">{b.reason_codes.map((r) => reasonText(r, { supplier: supplierName(b.supplier_id) })).join('. ')}.</span>
             </div>
           ))}
           {c.cart.dropped_lines?.length ? (
@@ -146,15 +164,29 @@ export function ConfirmView({ id }: { id: string }) {
           <ButtonLink href="/" variant="secondary">Back to home</ButtonLink>
         </div>
       )}
+      {open && failedN > 0 && <Callout tone="bad">A safety check failed, so this cart cannot be approved. Decline it and start again.</Callout>}
       {open && (
-        <div className="actionbar" role="group" aria-label="Your decision" style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 4 }}>
-          <Button block busy={busy === 'approve'} busyLabel="Placing order…" disabled={!!busy || denied.length > 0} onClick={() => answer(true)}>
-            Approve {rupees(c.cart.total_paise, true)}
-          </Button>
-          <Button variant="text" block busy={busy === 'decline'} busyLabel="Declining…" disabled={!!busy} onClick={() => answer(false)}>Decline</Button>
+        <div className="rf-decide" role="group" aria-label="Your decision">
+          {askDecline ? (
+            <div className="rf-decline-ask" role="alertdialog" aria-labelledby="decline-q">
+              <span id="decline-q" className="small" style={{ color: 'var(--ink)' }}><b>Decline this cart?</b> Nothing will be ordered. Your limits stay active.</span>
+              <div className="row">
+                <Button variant="secondary" disabled={!!busy} onClick={() => setAskDecline(false)}>Keep it</Button>
+                <Button variant="danger" busy={busy === 'decline'} busyLabel="Declining…" disabled={!!busy} onClick={() => answer(false)}>Yes, decline</Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Button block busy={busy === 'approve'} busyLabel="Placing order…" disabled={!!busy || failedN > 0} onClick={() => answer(true)}>
+                Approve {rupees(c.cart.total_paise, true)}
+              </Button>
+              <div className="rf-or">
+                <Button variant="text" style={{ minHeight: 44 }} disabled={!!busy} onClick={() => setAskDecline(true)}>Decline cart</Button>
+              </div>
+            </>
+          )}
         </div>
       )}
-      {open && denied.length > 0 && <Callout tone="bad">A safety check failed, so this cart cannot be approved. Decline it and start again.</Callout>}
       <Evidence>
         <span>Confirmation <span className="code">{c.confirmation_id}</span> · cart <span className="code">{c.cart_draft_id}</span> · negotiation <span className="code">{c.negotiation_id}</span></span>
       </Evidence>

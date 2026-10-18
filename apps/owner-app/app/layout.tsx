@@ -7,10 +7,17 @@ import { Nav } from '@/components/Nav';
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist', display: 'swap' });
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono', display: 'swap' });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://saudaai.web.app';
+const OG_TITLE = 'Sauda — restock within your limits';
+const OG_DESC = 'Talk your restock in English, Hindi or Telugu. Sauda negotiates with registered suppliers inside limits you sign, and buys nothing until you approve.';
+
 export const metadata: Metadata = {
-  title: { default: 'Sauda — restock within your limits', template: '%s · Sauda' },
+  metadataBase: new URL(SITE_URL),
+  title: { default: OG_TITLE, template: '%s · Sauda' },
   applicationName: 'Sauda',
   description: 'Sauda drafts your restock, negotiates with registered suppliers inside the limits you sign, and orders only after you approve. Every step is on a verifiable record.',
+  openGraph: { type: 'website', siteName: 'Sauda', title: OG_TITLE, description: OG_DESC, locale: 'en_IN' },
+  twitter: { card: 'summary_large_image', title: OG_TITLE, description: OG_DESC },
 };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: [{ media: '(prefers-color-scheme: light)', color: '#fafafa' }, { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' }], viewportFit: 'cover' };
 
