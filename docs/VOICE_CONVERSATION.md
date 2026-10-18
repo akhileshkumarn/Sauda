@@ -93,10 +93,11 @@ Supported: English, हिन्दी, తెలుగు, தமிழ், ಕ
 - Indic digits (১০, ௨௦, ੧੨, ۱۲, …) are normalised to 0-9 in transcripts and before the restock fast path and the
   onboarding PIN / GSTIN checks. No new number words were added to the fast path: number words in the new
   languages are left to Gemini, which handled all of them in the tests below.
-- Not translated yet (same as for Hindi and Telugu before this change): the restock turn reply ("Added 10 …",
-  "Salt LITE now 25") is built in code in English, and the onboarding acknowledgement fragments and read-back
-  values ("sole proprietorship", "not GST registered", "buying rice, edible oil") are English inside a sentence in
-  the owner's language. Clarification questions written by Gemini are asked to be in the owner's language.
+- Restock turn replies ("Added 10 …", "… now 25", "Total up to ₹…") are built in code from per-language templates
+  (`apps/buyer-agent/buyer_agent/reply_i18n.py`) for all 13 languages; product names stay as printed on the pack.
+  Still English: onboarding acknowledgement fragments and read-back values ("sole proprietorship", "not GST
+  registered", "buying rice, edible oil") inside a sentence in the owner's language. Clarification questions
+  written by Gemini are asked to be in the owner's language.
 - If the browser reports `language-not-supported`, the panel offers "Use recorder mode", which uses the Gemini
   transcription route instead.
 
