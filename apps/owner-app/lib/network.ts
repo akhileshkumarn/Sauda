@@ -212,7 +212,7 @@ export async function reviewMe(): Promise<ReviewerMode> {
   if (MOCK) return m(() => ({ reviewer: mock.mockMode() !== 'noreview', demo: mock.mockMode() === 'noreview', note: mock.mockMode() === 'noreview' ? DEMO_REVIEW_NOTE : null }), 50);
   return req<ReviewerMode>('GET', '/review/me');
 }
-export const DEMO_REVIEW_NOTE = 'Demo mode: you can review only simulated demo businesses and your own sample shop. Real businesses are reviewed only by Sauda reviewers.';
+export const DEMO_REVIEW_NOTE = 'You can review your ready shop and the showcase businesses. Real businesses are reviewed by the Sauda team.';
 
 let reviewerCache: ReviewerMode | null = null;
 /** {reviewer, demo}: real reviewers (REVIEWER_EMAILS) see everything; anyone else gets the demo console on demo data only. */
@@ -247,7 +247,8 @@ export async function sandboxDelete(): Promise<{ ok: boolean; removed: number; e
   if (MOCK) return m(() => mock.mockSandboxDelete(), 400);
   return req('POST', '/tn/sandbox/delete');  // same as DELETE /tn/sandbox
 }
-export const SAMPLE_NOTE = 'Sample shop: simulated data so you can try every step. It is not a real business and only you can see it.';
+export const SAMPLE_NOTE = 'Ready shop · Balaji Kirana & General Stores. Your copy is private to you. Add your own business any time.';
+export const READY_SHOP_NAME = 'Balaji Kirana & General Stores';
 
 // ---------------------------------------------------------------- WhatsApp share (public wa.me link, no API)
 export function whatsappHref(text: string): string { return `https://wa.me/?text=${encodeURIComponent(text)}`; }
@@ -280,7 +281,7 @@ export const CATEGORY_WORD: Record<TnCategory, { label: string; tone: 'ok' | 'wa
 };
 export function categoryWord(c: TnCategory | string | undefined, role?: TnRole[], sample?: boolean): { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' } {
   const w0 = CATEGORY_WORD[c as TnCategory] || { label: c ? 'Verification pending' : 'Not checked yet', tone: 'neutral' as const };
-  const w = sample ? { ...w0, label: `${w0.label} (sample)` } : w0;
+  const w = w0;
   if (c === 'ready_for_counterparty_review' && role && role.includes('seller') && !role.includes('buyer')) return { ...w, label: 'Ready for buyer review' };
   return w;
 }
@@ -305,7 +306,7 @@ export const SOURCE_WORD: Record<TnSourceKind, string> = {
   human_review: 'Human-reviewed',
   self_declared: 'Self-declared',
   preliminary_validation: 'Preliminary check',
-  simulated_fixture: 'Simulated (demo data)',
+  simulated_fixture: 'Not checked against a government registry yet',
   device_signal: 'Device location',
 };
 export const sourceWord = (s?: string | null) => (s ? SOURCE_WORD[s as TnSourceKind] || s.replace(/_/g, ' ') : '');

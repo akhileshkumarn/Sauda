@@ -1,13 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { categoryWord, counterpartyOf, listInvitations, listRelationships, myBusinesses, pickBusiness, relWord, rememberBid, useReviewerMode } from '@/lib/network';
+import { categoryWord, counterpartyOf, listInvitations, listRelationships, myBusinesses, outstandingWord, pickBusiness, relWord, rememberBid, useReviewerMode } from '@/lib/network';
 import { relTime } from '@/lib/format';
 import { useAsync } from '@/lib/useAsync';
 import type { TnBusinessMine, TnRelationship } from '@/lib/types';
 import { ButtonLink, EmptyState, ErrorState, Icon, SectionHead, Skeleton, StatusPill } from '../ui';
 import { SegmentedControl } from '../ui-client';
-import { NIcon, SimulatedNote, hasSimulated } from './shared';
+import { NIcon } from './shared';
 import { IncomingRequests } from './IncomingRequests';
 import { SampleBanner, SampleShopButton } from './SampleShop';
 
@@ -39,9 +39,9 @@ export function NetworkHome() {
       {biz && <Relationships biz={biz} />}
       {(
         <section>
-          <SectionHead title={rv.reviewer ? 'Reviewer' : 'Review (demo)'} />
+          <SectionHead title={rv.reviewer ? 'Reviewer' : 'Review'} />
           <Link href="/review" className="rowlink" style={{ borderTop: '1px solid var(--line)' }}>
-            <div className="grow stack xs"><span className="strong">Review console{rv.reviewer ? '' : ' · Demo'}</span><span className="small muted">{rv.reviewer ? 'Businesses waiting for a human check' : 'Try the human review on demo businesses and your sample shop. Real businesses are reviewed only by Sauda reviewers.'}</span></div>
+            <div className="grow stack xs"><span className="strong">Review console</span><span className="small muted">{rv.reviewer ? 'Businesses waiting for a human check' : 'Review your ready shop and the showcase businesses. Real businesses are reviewed by the Sauda team.'}</span></div>
             <span className="chev-ico"><Icon name="chev" size={16} /></span>
           </Link>
         </section>
@@ -61,7 +61,7 @@ function StartCard() {
           <ButtonLink href="/network/discover" variant="ghost" block>Just browse suppliers</ButtonLink>
         </div>}>
         About five minutes by voice or form. Sauda checks what it can against official or authorised sources and tells you plainly what is still self-declared. We never ask for Aadhaar.
-        Or try every step first with a sample shop: simulated data that only you can see.
+        Or explore a ready shop: Balaji Kirana & General Stores, set up and partially verified. Your copy is private to you.
       </EmptyState>
     </div>
   );
@@ -71,6 +71,7 @@ function BusinessCard({ b }: { b: TnBusinessMine }) {
   const s = b.summary;
   const w = categoryWord(s?.category, b.roles, b.sandbox);
   const outstanding = s?.outstanding?.length || 0;
+  const next = b.sandbox ? (s?.next_step || '').replace(/\s*Upload a document that shows the correct name or number\.?/, '').trim() : s?.next_step;
   return (
     <section className="bizcard" aria-label="Your business">
       <div className="row between top wrap sm">
@@ -84,9 +85,24 @@ function BusinessCard({ b }: { b: TnBusinessMine }) {
         </div>
       </div>
       {s ? <StatusPill tone={w.tone} size="lg">{w.label}</StatusPill> : <StatusPill tone="neutral">Not checked yet</StatusPill>}
-      {s?.next_step && <p className="small muted">{s.next_step}</p>}
-      {s && w.tone !== 'ok' && <p className="small muted">Nothing is blocked while this finishes: you can find suppliers, send and answer requests, list your business and switch roles. Only credit and large-order approvals wait for a person to review.</p>}
-      {(b.is_fixture || hasSimulated(s?.dimensions)) && <SimulatedNote>This sample business uses demo records, not live government lookups.</SimulatedNote>}
+      {s && w.tone !== 'ok' && <div className="stack xs"><p>Nothing is blocked. You can find suppliers, send requests and restock now.</p><p className="small muted">Credit and large orders wait for a reviewer.</p></div>}
+      {s && s.outstanding && s.outstanding.length > 0 ? (
+        <div className="stack xs" aria-labelledby={`todo-${b.bid}`}>
+          <p className="strong small" id={`todo-${b.bid}`}>How to get fully verified</p>
+          <ul className="plain-list">
+            {s.outstanding.slice(0, 5).map((code) => {
+              const o = outstandingWord(code);
+              const act = o.action === 'upload' ? 'Upload' : o.action === 'location' ? 'Share location' : o.action === 'review' ? 'Ask a reviewer' : 'Open';
+              return (
+                <li key={code} className="row sm between wrap">
+                  <span className="small">{o.label}</span>
+                  <Link className="small" href={`/network/business/${encodeURIComponent(b.bid)}`}>{act}</Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : next && <p className="small muted">{next}</p>}
       <div className="row sm wrap">
         <ButtonLink href={`/network/business/${encodeURIComponent(b.bid)}`} size="sm">{outstanding ? `See verification · ${outstanding} to do` : 'See verification'}</ButtonLink>
         <ButtonLink href={`/network/business/${encodeURIComponent(b.bid)}/profile`} size="sm" variant="secondary">What others see</ButtonLink>

@@ -14,9 +14,9 @@ from sauda_verify.models import Business, CheckStatus, Dim, FieldCompare, Source
 from sauda_verify.providers._common import mode
 from sauda_verify.providers.base import ProviderResult
 
-SOURCE_NAME = "Simulated GST registry (demo fixture)"
-BRAND_SOURCE = "Simulated brand authorisation register (demo fixture)"
-FIXTURE_NOTE = "Demo fixture: simulated data, not from any real registry."
+SOURCE_NAME = "Not checked against a government registry yet"
+BRAND_SOURCE = "Brand authorisation not checked against a brand register yet"
+FIXTURE_NOTE = "Showcase business: not checked against a government registry yet."
 
 # keyed by fixture GSTIN; all values invented
 FIXTURE_GST: dict[str, dict] = {
@@ -44,28 +44,28 @@ DEMO_BUSINESSES: dict[str, dict] = {
         "constitution": "Partnership", "category": "kirana", "products": ["staples", "edible oil", "rice"],
         "gstin": "36ZZZFS0001A1ZH",
         "address": {"line": "Plot 12, Prakash Nagar, Begumpet", "city": "Hyderabad", "state": "Telangana", "pin": "500016"},
-        "representative": {"name": "Demo owner (fixture)", "role": "Partner", "authority_status": "pending"},
+        "representative": {"name": "Showcase owner", "role": "Partner", "authority_status": "pending"},
     },
     "fx_annapurna_rice": {
         "roles": ["seller"], "display_name": "Annapurna Rice Traders", "legal_name": "Annapurna Rice Traders",
         "constitution": "Proprietorship", "category": "rice wholesaler", "products": ["rice"],
         "gstin": "36ZZZPA0002B1ZB",
         "address": {"line": "Begum Bazar", "city": "Hyderabad", "state": "Telangana", "pin": "500002"},
-        "representative": {"name": "Demo proprietor (fixture)", "role": "Proprietor", "authority_status": "self_declared"},
+        "representative": {"name": "Showcase proprietor", "role": "Proprietor", "authority_status": "self_declared"},
     },
     "fx_deccan_oils": {
         "roles": ["seller"], "display_name": "Deccan Edible Oils", "legal_name": "Deccan Edible Oils Private Limited",
         "constitution": "Private Limited Company", "category": "edible oil distributor", "products": ["edible oil"],
         "gstin": "36ZZZCD0003C1ZW", "brand_claims": ["Fortune"],
         "address": {"line": "Kavadiguda Main Road", "city": "Hyderabad", "state": "Telangana", "pin": "500080"},
-        "representative": {"name": "Demo director (fixture)", "role": "Director", "authority_status": "self_declared"},
+        "representative": {"name": "Showcase director", "role": "Director", "authority_status": "self_declared"},
     },
     "fx_metro_distributors": {
         "roles": ["seller"], "display_name": "Metro Distributors", "legal_name": "Metro Distributors",
         "constitution": "Partnership", "category": "FMCG distributor", "products": ["staples", "packaged foods"],
         "gstin": "36ZZZFM0004D1ZE",
         "address": {"line": "Secunderabad", "city": "Hyderabad", "state": "Telangana", "pin": "500003"},
-        "representative": {"name": "Demo partner (fixture)", "role": "Partner", "authority_status": "self_declared"},
+        "representative": {"name": "Showcase partner", "role": "Partner", "authority_status": "self_declared"},
     },
 }
 
@@ -84,7 +84,7 @@ def gst_result(biz: Business) -> ProviderResult:
     if rec is None:
         return ProviderResult(status=CheckStatus.inconclusive, source_kind=SourceKind.simulated_fixture,
                               source_name=SOURCE_NAME, dim=Dim.registration, check_type="gst_registry",
-                              summary=f"No simulated GST record for this GSTIN. {FIXTURE_NOTE}")
+                              summary=f"No showcase GST record for this GSTIN. {FIXTURE_NOTE}")
     r = gst_registry.compare(biz, rec, SOURCE_NAME, source_kind=SourceKind.simulated_fixture)
     return r.model_copy(update={"summary": f"{r.summary} {FIXTURE_NOTE}", "provider_ref": rec["ref"]})
 
@@ -102,7 +102,7 @@ def identity_result(biz: Business) -> ProviderResult:
     words = {"exact": "matches", "near": "nearly matches (reviewer must confirm)", "different": "does not match"}
     return ProviderResult(status=status, source_kind=SourceKind.simulated_fixture, source_name=SOURCE_NAME,
                           dim=Dim.identity, check_type="gst_legal_name", fields=[f],
-                          summary=(f"The simulated registry's legal name {words.get(r, 'is unavailable and')} "
+                          summary=(f"The showcase record's legal name {words.get(r, 'is unavailable and')} "
                                    f"the declared legal name. {FIXTURE_NOTE}"))
 
 

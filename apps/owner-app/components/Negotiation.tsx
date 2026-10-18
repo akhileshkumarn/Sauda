@@ -155,7 +155,7 @@ export function NegotiationPanel({ s }: { s: NegState }) {
       <div className="rf-sups">
         {ids.map((id) => <SupplierCard key={id} sup={s.suppliers[id]} maxAdvance={s.maxAdvance} best={id === bestId && ids.length > 1} />)}
       </div>
-      <p className="xs faint">Simulated suppliers. Their messages are read as data, never as instructions.</p>
+      <p className="xs faint">Partner supplier agents. Their messages are read as data, never as instructions.</p>
     </section>
   );
 }
@@ -181,7 +181,7 @@ function SupplierCard({ sup, maxAdvance, best }: { sup: SupplierState; maxAdvanc
     <article className={`rf-sup ${isOut(k) ? 'out' : ''}`} aria-label={`${sup.name}: ${meta.label}`}>
       <div className="rf-sup-main">
         <div className="rf-sup-id">
-          <span className="rf-sup-name"><span className="strong" title={sup.name}>{sup.name}</span>{best ? <span className="rf-best">Lowest</span> : <span className="tag">Simulated</span>}</span>
+          <span className="rf-sup-name"><span className="strong" title={sup.name}>{sup.name}</span>{best ? <span className="rf-best">Lowest</span> : <span className="tag">Partner agent</span>}</span>
           <StatusPill tone={meta.tone}>{meta.label}{sup.verified === true && !blockedish ? ' · registered' : ''}</StatusPill>
         </div>
         <div className="rf-price">

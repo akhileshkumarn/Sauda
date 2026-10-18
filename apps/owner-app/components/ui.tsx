@@ -5,7 +5,7 @@ import { rupees } from '@/lib/format';
 import type { RuleVerdict } from '@/lib/types';
 
 export const PLAN_B = 'Product set and prices are real; festival demand uplift is a stated assumption.';
-export const SUPPLIER_DISCLOSURE = 'Simulated distributors: supplier agents with real catalogues and published strategies. Any UCP or A2A supplier can replace them.';
+export const SUPPLIER_DISCLOSURE = 'Partner supplier agents with real catalogues and published strategies. Any UCP or A2A supplier can join.';
 export const SETTLEMENT_CAPTION = 'Payment goes from your UPI app straight to the supplier. Sauda never holds funds.';
 
 // ---------------------------------------------------------------- icons

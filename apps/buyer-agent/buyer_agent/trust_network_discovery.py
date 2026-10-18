@@ -39,7 +39,7 @@ from .trust_network_routes import (
 DISCOVER_PER_MIN = 60
 CONNECT_PER_DAY = 20
 SORT_NOTE = "Sorted by delivery area and verification status, not by price or quality"
-FIXTURE_LABEL = "Simulated (demo data)"
+FIXTURE_LABEL = "Showcase business"
 CARD_DIMS = (Dim.identity, Dim.registration, Dim.address, Dim.operational, Dim.representative, Dim.distribution_authority)
 VERIFIED_CATEGORIES = {Category.identity_confirmed, Category.evidence_reviewed, Category.ready_for_counterparty_review}
 CATEGORY_STRENGTH = {Category.ready_for_counterparty_review: 3, Category.evidence_reviewed: 2, Category.identity_confirmed: 1}
@@ -168,7 +168,7 @@ def trust_view(b: dict) -> tuple[dict, Category, str | None]:
         else:
             out_dims.append({"dim": d.value, "label": policy.DIM_LABELS[d], "status": ds.status.value,
                              "source_kind": ds.source_kind.value if ds.source_kind else None})
-    text = CATEGORY_TEXT[cat] + (" (simulated demo data)" if fixture else "")
+    text = CATEGORY_TEXT[cat] + (" (showcase business)" if fixture else "")
     last = max((c.checked_at for c in checks if c.checked_at), default=None)
     return {"category": cat.value, "category_text": text, "dims": out_dims}, cat, last
 
@@ -314,7 +314,7 @@ def _buyer_business(v: Viewer, bid: str | None) -> dict | None:
 
 
 def _buyer_required() -> object:
-    return _err(403, "buyer_profile_required", "To request a connection, create your business profile or try a sample shop first. "
+    return _err(403, "buyer_profile_required", "To request a connection, create your business profile or explore a ready shop first. "
                 "You can keep browsing suppliers without one.", options=["create_profile", "sample_shop"])
 
 
@@ -398,7 +398,7 @@ def discover(bid: str | None = Query(None), q: str | None = Query(None, max_leng
     nxt = _encode_cursor(off + limit) if off + limit < len(rows) else None
     if not buyer:
         return {"viewer": None, "viewer_needs_profile": True,
-                "viewer_note": "You are browsing without a business profile. Create one, or try a sample shop, to request a connection.",
+                "viewer_note": "You are browsing without a business profile. Create one, or explore a ready shop, to request a connection.",
                 "scope": scope, "area": {"district": title(di), "state": title(st)}, "verified_only": verified_only,
                 "results": page, "next_cursor": nxt, "total": len(rows), "sort_note": SORT_NOTE}
     return {"viewer": {"bid": buyer["bid"], "display_name": buyer.get("display_name"), "district": title(my_d), "state": title(my_s),

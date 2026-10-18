@@ -9,7 +9,7 @@ import { useAsync } from '@/lib/useAsync';
 import type { TnBusinessFull, TnEvidence, TnEvidenceType, TnSummary } from '@/lib/types';
 import { Button, ButtonLink, Callout, ErrorState, Icon, SectionHead, Skeleton } from '../ui';
 import { Sheet } from '../ui-client';
-import { CategoryHero, DimensionList, Limitations, NIcon, SimulatedNote, hasSimulated } from './shared';
+import { CategoryHero, DimensionList, Limitations, NIcon } from './shared';
 import { SampleBanner } from './SampleShop';
 import { ListingSettings } from './Listing';
 import { ContactVerifyButton } from './ContactVerify';
@@ -38,7 +38,6 @@ function fallbackSummary(d: TnBusinessFull): TnSummary {
 function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; reload: () => void }) {
   const b = data.business;
   const s = data.summary || fallbackSummary(data);
-  const sim = b.is_fixture || hasSimulated(data.checks) || hasSimulated(s.dimensions);
   const [upload, setUpload] = useState<TnEvidenceType | null>(null);
   const [note, setNote] = useState<{ tone: 'ok' | 'bad' | 'warn'; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -74,9 +73,8 @@ function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; r
       {b.sandbox && <SampleBanner onChanged={reload} />}
       <CategoryHero summary={s} roles={b.roles} sample={b.sandbox} title={<>{b.display_name}{b.address?.city ? ` · ${b.address.city}` : ''}</>} />
       {s.category !== 'identity_confirmed' && s.category !== 'evidence_reviewed' && s.category !== 'ready_for_counterparty_review' && (
-        <p className="small muted">Nothing is blocked while verification finishes. You can find suppliers, send and answer requests, list your business and switch roles now. Only approving credit or large orders waits for a person to review; that is intended.</p>
+        <div className="stack xs"><p className="strong">Nothing is blocked. You can find suppliers, send requests and restock now.</p><p className="small muted">Credit and large orders wait for a reviewer.</p></div>
       )}
-      <SimulatedNote show={sim} />
 
       <section aria-labelledby="out-h" className={`stack sm ${outstanding.length ? 'tn-todo' : ''}`}>
         <SectionHead title={<span id="out-h">{outstanding.length ? `What you can do next · ${outstanding.length}` : 'Outstanding checks'}</span>} />

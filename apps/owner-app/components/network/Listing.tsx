@@ -34,11 +34,11 @@ export function ListingSettings({ business, summary, onSaved }: { business: TnBu
     categories: l.categories, service_area: { ...sa, basis: 'self_declared', label: `${areaLabel(sa)} (self-declared)` },
     min_order_paise: minRupees ? Math.round(Number(minRupees) * 100) : null, notes: l.notes || null,
     trust: {
-      category: summary?.category || 'additional_review_required', category_text: (summary?.category_label || 'Verification pending') + (business.sandbox ? ' (sample)' : business.is_fixture ? ' (simulated demo data)' : ''),
+      category: summary?.category || 'additional_review_required', category_text: (summary?.category_label || 'Verification pending') + (business.sandbox ? '' : business.is_fixture ? ' (showcase business)' : ''),
       dims: (summary?.dimensions || []).filter((d) => PREVIEW_DIMS.includes(d.dim)).map((d) => ({ dim: d.dim, status: d.status, source_kind: d.source_kind })),
     },
     last_checked_at: summary?.dimensions?.map((d) => d.checked_at).filter(Boolean).sort().pop() || null,
-    is_fixture: !!business.is_fixture, fixture_label: business.is_fixture ? 'Simulated (demo data)' : null, connection: 'none', rid: null,
+    is_fixture: !!business.is_fixture, fixture_label: business.is_fixture ? 'Showcase business' : null, connection: 'none', rid: null,
   };
   useEffect(() => { setCard(null); }, [l, minRupees]);
 

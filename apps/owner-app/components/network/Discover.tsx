@@ -200,10 +200,10 @@ export function Discover() {
         <>
           {needsBuyer && (
             <Callout tone="info" title="Browsing without a business profile">
-              You can look at every listed supplier. To request a connection, create your business profile or try a sample shop; Request to connect walks you through it.
+              You can look at every listed supplier. To request a connection, create your business profile or explore a ready shop; Request to connect walks you through it.
             </Callout>
           )}
-          {biz?.sandbox && <Callout tone="neutral" icon="flask">You are browsing as your sample shop, <b>{biz.display_name}</b>. Requests you send from it are demo requests to demo suppliers.</Callout>}
+          {biz?.sandbox && <Callout tone="neutral" icon="flask">You are browsing as your ready shop, <b>{biz.display_name}</b>. Requests you send from it go to showcase suppliers.</Callout>}
           <div className="dsc-controls" role="search" aria-label="Find suppliers">
             <label className="dsc-search">
               <span className="sr-only">Search suppliers</span>
@@ -275,7 +275,7 @@ export function Discover() {
               </ul>
               {data?.next_cursor && <div><Button variant="secondary" size="sm" busy={more} busyLabel="Loading…" onClick={() => load(data.next_cursor)}>Show more</Button></div>}
               {rows.some((c) => c.is_fixture) && (
-                <p className="xs muted row sm" style={{ alignItems: 'flex-start' }}><NIcon name="flask" size={14} /><span>Cards marked Simulated (demo data) are sample businesses with made-up records. They are not real companies.</span></p>
+                <p className="xs muted row sm" style={{ alignItems: 'flex-start' }}><NIcon name="flask" size={14} /><span>Showcase businesses are not checked against a government registry yet.</span></p>
               )}
             </section>
           )}

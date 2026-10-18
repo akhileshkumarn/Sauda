@@ -28,7 +28,7 @@ export function SourceBadge({ kind, name }: { kind?: TnSourceKind | string | nul
   if (!kind) return null;
   const k = kind as TnSourceKind;
   const label = sourceWord(k);
-  const title = k === 'simulated_fixture' ? 'Demo data made up for this prototype. Not from a government or provider record.' : name || label;
+  const title = k === 'simulated_fixture' ? 'Not checked against a government registry yet' : name || label;
   return (
     <span className={`src ${SRC_CLASS[k] || ''}`} title={title}>
       <NIcon name={SRC_ICON[k] || 'info'} size={12} />
@@ -47,7 +47,7 @@ export function SimulatedNote({ show = true, children }: { show?: boolean; child
   return (
     <div className="sim-note" role="note">
       <NIcon name="flask" />
-      <div><b>Simulated (demo data).</b> {children || 'Some results here come from demo fixtures, not live government or provider records. They show how verification works; they prove nothing about a real business.'}</div>
+      <div>{children || 'Some checks here are not checked against a government registry yet.'}</div>
     </div>
   );
 }
@@ -111,7 +111,7 @@ export function DimensionList({ dims, checks, compare = true }: { dims?: TnDimen
               <p className="dim-sum">{r.summary}</p>
               <div className="dim-meta">
                 {r.status !== 'not_applicable' && <SourceBadge kind={r.source_kind} name={r.source_name} />}
-                {r.status !== 'not_applicable' && r.source_name && r.source_name !== '—' && <span className="break">{r.source_name}</span>}
+                {r.status !== 'not_applicable' && r.source_name && r.source_name !== '—' && r.source_name !== sourceWord(r.source_kind) && <span className="break">{r.source_name}</span>}
                 {r.checked_at && <span title={ist(r.checked_at)}>Checked {relTime(r.checked_at)}</span>}
                 {r.expires_at && <span>Valid until {ist(r.expires_at)}</span>}
               </div>
@@ -132,12 +132,13 @@ export function DimensionList({ dims, checks, compare = true }: { dims?: TnDimen
 
 export function CategoryHero({ summary, roles, title, children, sample }: { summary: TnSummary; roles?: TnRole[]; title?: ReactNode; children?: ReactNode; sample?: boolean }) {
   const w = categoryWord(summary.category, roles, sample);
+  const next = sample ? (summary.next_step || '').replace(/\s*Upload a document that shows the correct name or number\.?/, '').trim() : summary.next_step;
   return (
     <div className="tn-hero">
       {title && <p className="small muted break">{title}</p>}
       <h1>{w.label}</h1>
       <div><StatusPill tone={w.tone}>{w.tone === 'ok' ? 'On track' : w.tone === 'bad' ? 'Not verified' : 'Needs attention'}</StatusPill></div>
-      {summary.next_step && <div className="tn-next"><Icon name="arrow" size={16} /><div><b>Next: </b>{summary.next_step}</div></div>}
+      {next && <div className="tn-next"><Icon name="arrow" size={16} /><div><b>Next: </b>{next}</div></div>}
       {children}
     </div>
   );

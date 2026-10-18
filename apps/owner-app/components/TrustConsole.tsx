@@ -255,7 +255,7 @@ function TamperDemo({ events, tamperedSeq, onTamper, onReset }: {
 
   return (
     <Card title={<span className="row sm wrap"><span>Try to break the record</span><StatusPill tone="info">Test only</StatusPill></span>}
-      subtitle="Change one value in a copy of this record, in this page only, and watch verification fail. This is a demonstration, not an incident; the stored record is never touched."
+      subtitle="Change one value in a copy of this record, in this page only, and watch verification fail. This is a walkthrough, not an incident; the stored record is never touched."
       action={tamperedSeq !== null ? <Button size="sm" variant="secondary" icon="refresh" onClick={onReset}>Reset test</Button> : null}>
       <div className="stack">
         <label className="field">Event to change

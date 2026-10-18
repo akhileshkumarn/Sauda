@@ -24,7 +24,7 @@ export function HomeView() {
       <PageHead size="display" title={data?.shop?.name || (loading ? ' ' : 'Your shop')}
         description="Restock inside limits you sign. Nothing is bought until you approve."
         action={<div className="home-new"><NewRestockButton /></div>} />
-      <p className="home-sample"><span className="dot neutral" aria-hidden />Sample shop · real products and prices · suppliers are simulated</p>
+      <p className="home-sample"><span className="dot neutral" aria-hidden />Real products and prices · partner supplier agents</p>
 
       {loading && !data && <div className="home-skel"><Skeleton lines={2} block /><Skeleton lines={4} /></div>}
       {error && !data ? <ErrorState error={error} onRetry={reload} title="Could not load your shop" /> : null}

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { ist } from '@/lib/format';
-import { DEMO_REVIEW_NOTE, ageText, dimWord, outstandingWord, reviewDecision, reviewQueue, reviewTask, useReviewerMode } from '@/lib/network';
+import { DEMO_REVIEW_NOTE, ageText, dimWord, outstandingWord, reviewDecision, reviewQueue, reviewTask, sourceWord, useReviewerMode } from '@/lib/network';
 import { SampleShopButton } from './SampleShop';
 import { useAsync } from '@/lib/useAsync';
 import type { TnCheck, TnReviewAction, TnReviewTaskDetail } from '@/lib/types';
@@ -26,13 +26,13 @@ export function ReviewQueue() {
   const done = rows.filter((t) => !open.includes(t));
   return (
     <div className="narrow">
-      <div className="page-head"><h1>Review{demo ? <> <span className="tag">Demo</span></> : null}</h1><p>Businesses the checks could not settle on their own. Every decision needs a reason and is written to the signed record.</p></div>
-      {demo && <Callout tone="neutral" icon="flask" title="Demo review console">{DEMO_REVIEW_NOTE} Your decisions are recorded and labelled Demo reviewer action. On shared demo businesses they are recorded only, so the task stays open for the next visitor; on your own sample shop they take effect.</Callout>}
+      <div className="page-head"><h1>Review</h1><p>Businesses the checks could not settle on their own. Every decision needs a reason and is written to the signed record.</p></div>
+      {demo && <p className="small muted">{DEMO_REVIEW_NOTE}</p>}
       {q.loading && !q.data && <Skeleton lines={6} />}
       {forbidden && <EmptyState icon="lock" title="Reviewers only">This console is for Sauda reviewers. Your account is not on the reviewer list.</EmptyState>}
       {q.error && !q.data && !forbidden ? <ErrorState error={q.error} onRetry={q.reload} title="Could not load the review queue" /> : null}
       {q.data && rows.length === 0 && (demo
-        ? <EmptyState icon="check" title="No demo tasks right now" action={<SampleShopButton />}>Start a sample shop to get your own review task to try.</EmptyState>
+        ? <EmptyState icon="check" title="No review tasks right now" action={<SampleShopButton />}>Explore a ready shop to get your own review task.</EmptyState>
         : <EmptyState icon="check" title="Nothing to review">New tasks appear when a check conflicts, a document needs reading, or an owner asks for a manual review.</EmptyState>)}
       {[{ t: `Waiting · ${open.length}`, r: open }, { t: `Decided · ${done.length}`, r: done }].map((g) => g.r.length > 0 && (
         <section key={g.t}>
@@ -47,7 +47,7 @@ export function ReviewQueue() {
                     <span className="small muted row sm wrap" style={{ rowGap: 0 }}>
                       <StatusPill tone={w.tone}>{w.label}</StatusPill>
                       {t.roles?.length ? <span>{t.roles.map((r) => (r === 'buyer' ? 'Buyer' : 'Supplier')).join(', ')}</span> : null}
-                      {t.sandbox ? <span className="tag">Your sample shop</span> : t.is_fixture && <SourceBadge kind="simulated_fixture" />}
+                      {t.sandbox ? <span className="tag">Your ready shop</span> : t.is_fixture && <span className="tag">Showcase business</span>}
                     </span>
                   </div>
                   <span className="small muted num" title={ist(t.created_at)}>{ageText(t.created_at)}</span>
@@ -90,7 +90,7 @@ function TaskBody({ d, reload }: { d: TnReviewTaskDetail; reload: () => void }) 
   const conflicts = d.checks.filter((c) => c.fields?.some((f) => f.match === false) || c.status === 'conflict' || c.status === 'failed');
   const doneChecks = d.checks.filter((c) => !['pending', 'inconclusive'].includes(c.status) && c.status !== 'not_applicable');
   const outstanding = d.summary?.outstanding || [];
-  const audit = d.audit && d.audit.length ? d.audit : t.decisions.map((x) => ({ action: x.action, reason: x.reason, actor: x.demo ? `${x.label || 'Demo reviewer action'} · ${x.reviewer_hash || ''}` : x.reviewer_hash, at: x.at }));
+  const audit = d.audit && d.audit.length ? d.audit : t.decisions.map((x) => ({ action: x.action, reason: x.reason, actor: x.demo ? `${x.label || 'Recorded review'} · ${x.reviewer_hash || ''}` : x.reviewer_hash, at: x.at }));
   const demo = !!(d as { demo?: boolean }).demo || (!!b?.is_fixture && !rv.reviewer);
   return (
     <>
@@ -99,7 +99,7 @@ function TaskBody({ d, reload }: { d: TnReviewTaskDetail; reload: () => void }) 
         <h1>{b?.display_name || t.display_name || t.bid}</h1>
         <div className="row sm wrap"><StatusPill tone={w.tone} size="lg">{w.label}</StatusPill>{(b?.roles || t.roles || []).map((r) => <span key={r} className="tag">{r === 'buyer' ? 'Buyer' : 'Supplier'}</span>)}</div>
       </div>
-      <SimulatedNote show={!!(b?.is_fixture || t.is_fixture || hasSimulated(d.checks))}>Registry-like results for this business are demo fixtures. Use the official portal link below for any real check.</SimulatedNote>
+      <SimulatedNote show={!!(b?.is_fixture || t.is_fixture || hasSimulated(d.checks))}>Some results for this business are not checked against a government registry yet. Use the official portal link below for a registry check.</SimulatedNote>
 
       <section className="stack sm">
         <SectionHead title="Why it is here" />
@@ -144,7 +144,7 @@ function TaskBody({ d, reload }: { d: TnReviewTaskDetail; reload: () => void }) 
         </section>
       )}
 
-      {demo && <Callout tone="neutral" icon="flask" title="Demo reviewer">{DEMO_REVIEW_NOTE}</Callout>}
+      {demo && <p className="small muted">{DEMO_REVIEW_NOTE}</p>}
       <Decide d={d} onDone={reload} demo={demo} />
 
       <section>
@@ -170,11 +170,11 @@ function Conflict({ c }: { c: TnCheck }) {
   const mis = c.fields.filter((f) => f.match === false);
   return (
     <div className="stack sm">
-      <div className="row sm wrap"><span className="strong">{dimWord(c.dim).label}</span><SourceBadge kind={c.source_kind} name={c.source_name} /><span className="xs muted">{c.source_name}</span></div>
+      <div className="row sm wrap"><span className="strong">{dimWord(c.dim).label}</span><SourceBadge kind={c.source_kind} name={c.source_name} />{c.source_name !== sourceWord(c.source_kind) && <span className="xs muted">{c.source_name}</span>}</div>
       {(mis.length ? mis : c.fields).map((f, i) => (
         <div key={i} className="side" role="group" aria-label={f.field}>
           <div><span className="k">{f.field} · declared by business</span>{f.declared ?? '—'}</div>
-          <div className="bad"><span className="k">{f.field} · {c.source_kind === 'simulated_fixture' ? 'demo record shows' : 'source shows'}</span>{f.observed ?? '—'}</div>
+          <div className="bad"><span className="k">{f.field} · {c.source_kind === 'simulated_fixture' ? 'record shows' : 'source shows'}</span>{f.observed ?? '—'}</div>
         </div>
       ))}
     </div>
@@ -210,7 +210,7 @@ function Decide({ d, onDone, demo }: { d: TnReviewTaskDetail; onDone: () => void
     try {
       const r = await reviewDecision(d.task.tid, { action, scope: sc, reason: reason.trim() }) as { note?: string; demo?: boolean } | null;
       const label = ACTIONS.find((x) => x.a === action)?.label;
-      setOk(r?.demo || demo ? `Demo reviewer action: ${label} recorded. ${r?.note || ''}` : `${label} recorded.`);
+      setOk(r?.demo || demo ? `Recorded review: ${label} recorded. ${r?.note || ''}` : `${label} recorded.`);
       setAction(null); setReason(''); onDone();
     }
     catch (e) { setErr(e); } finally { setBusy(false); }
@@ -234,7 +234,7 @@ function Decide({ d, onDone, demo }: { d: TnReviewTaskDetail; onDone: () => void
             <textarea className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. GST portal shows trade name 'Sri Laxmi General Store'; same legal name and address; spelling variant only." />
           </label>
           <Button type="submit" variant={action === 'reject_claim' ? 'danger' : 'primary'} busy={busy} busyLabel="Recording…" disabled={reason.trim().length < 5}>{ACTIONS.find((x) => x.a === action)?.label}</Button>
-          <p className="xs muted">{demo ? 'Demo reviewer action on simulated data. It never changes a real business. ' : ''}A decision changes the business’s verification record, not credit or order limits. Approving credit or large orders always waits for a Sauda reviewer and the trading partner; that hold is intended, not an error.</p>
+          <p className="xs muted">{demo ? 'This review applies to your ready shop or a showcase business. It never changes a real business. ' : ''}A decision changes the business’s verification record, not credit or order limits. Approving credit or large orders always waits for a Sauda reviewer and the trading partner; that hold is intended, not an error.</p>
         </form>
       )}
       {ok && <Callout tone="ok">{ok}</Callout>}

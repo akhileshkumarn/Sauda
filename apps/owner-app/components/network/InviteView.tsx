@@ -31,7 +31,7 @@ export function InviteView() {
           <ButtonLink href={`/network/onboard?role=${role === 'seller' ? 'buyer' : 'seller'}`} block>Create your business profile</ButtonLink>
           <SampleShopButton block onReady={() => mine.reload()} />
         </div>}>
-          Set up your business (it does not need to be fully verified), or try with a sample shop, then invite the {role === 'seller' ? 'suppliers' : 'buyers'} you trade with.
+          Set up your business (it does not need to be fully verified), or explore a ready shop, then invite the {role === 'seller' ? 'suppliers' : 'buyers'} you trade with.
         </EmptyState>
       </div>
     );

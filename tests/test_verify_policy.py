@@ -106,7 +106,7 @@ def test_simulated_fixtures_never_count_as_official_registry():
     assert cat(checks, biz()) == Category.additional_review_required
     r = policy.readiness("prepaid_small", None, checks, biz(), now=T0)
     assert not r.ready and set(r.missing) == {"identity", "registration"}
-    assert any("simulated" in x.lower() for x in policy.limitations(checks))
+    assert any("government registry" in x.lower() for x in policy.limitations(checks))
 
 
 def test_ready_for_counterparty_review():

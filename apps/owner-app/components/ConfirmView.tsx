@@ -16,7 +16,7 @@ function SupplierBlock({ a, why }: { a: Allocation; why: Confirmation['cart']['w
   return (
     <section className="stack sm" aria-label={name}>
       <div className="rf-sup-h">
-        <h2><span title={name}>{name}</span><span className="tag">Simulated</span></h2>
+        <h2><span title={name}>{name}</span><span className="tag">Partner agent</span></h2>
         <Money paise={a.subtotal_paise} className="strong rf-num" />
       </div>
       <ul className="rf-items">
@@ -122,7 +122,7 @@ export function ConfirmView({ id }: { id: string }) {
         </div>
       )}
       {c.cart.savings_paise > 0 && (
-        <span className="rf-save" title={`Opening quotes totalled ${rupees(opening)} for the same items (simulated suppliers).`}>
+        <span className="rf-save" title={`Opening quotes totalled ${rupees(opening)} for the same items (partner supplier agents).`}>
           <Icon name="check" size={14} />
           <span><b style={{ fontWeight: 600 }}><Money paise={c.cart.savings_paise} whole /></b> below opening quotes{typeof c.cart.savings_pct === 'number' ? ` (${c.cart.savings_pct}%)` : ''}</span>
         </span>

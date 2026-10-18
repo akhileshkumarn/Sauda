@@ -140,7 +140,7 @@ function ScenarioRow({ s, res, busy, err, onRun }: { s: AttackScenario; res?: Sc
             <span className="row sm wrap"><StatusPill tone={om.tone}>{om.label}</StatusPill>{!ok && <StatusPill tone="bad">Not as expected</StatusPill>}</span>
             <span className="small">{by ? <><span className="muted">Stopped by </span><b>{by}</b>. Nothing was bought or paid.</> : res.outcome === 'allowed' ? 'Every layer passed. A legitimate offer still goes to you for approval.' : plainExplanation(res)}</span>
             <Evidence label="Evidence">
-              {s.simulated ? <p className="xs muted">{typeof s.simulated === 'string' ? s.simulated : 'Fixed test input; no live supplier involved'}</p> : null}
+              {s.simulated ? <p className="xs muted">{typeof s.simulated === 'string' ? s.simulated : 'Fixed attack input; no live supplier involved'}</p> : null}
               <ResultView r={res} />
             </Evidence>
           </div>

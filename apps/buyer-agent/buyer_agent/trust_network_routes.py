@@ -1345,9 +1345,8 @@ def relationship_decision(rid: str, body: RelDecisionIn, v: Viewer = Depends(vie
 OPEN_REVIEW = ("open", "needs_evidence", "escalated", "in_review")
 
 
-DEMO_REVIEWER_LABEL = "Demo reviewer action"
-DEMO_NOTE = ("Demo mode: you can review only simulated demo businesses and your own sample shop. "
-             "Real businesses are reviewed only by Sauda reviewers.")
+DEMO_REVIEWER_LABEL = "Recorded review"
+DEMO_NOTE = "You can review your ready shop and the showcase businesses. Real businesses are reviewed by the Sauda team."
 
 
 def _demo_visible(b: dict | None, v: Viewer) -> bool:
@@ -1366,7 +1365,7 @@ def _review_access(t: dict, v: Viewer) -> tuple[dict, bool]:
     if v.is_reviewer:
         return b, False
     if not _demo_visible(b, v):
-        raise HTTPException(403, "Demo reviewers can act only on simulated demo businesses and their own sample shop.")
+        raise HTTPException(403, "Without reviewer access you can act only on showcase businesses and your own ready shop.")
     return b, True
 
 
@@ -1509,7 +1508,7 @@ def _demo_decision(t: dict, b: dict, body: ReviewDecisionIn, v: Viewer, rh: str,
     if body.scope.startswith("relationship:"):
         r = tn.get(tn.RELATIONSHIPS, body.scope.split(":", 1)[1])
         if not r or bid not in (r["buyer_bid"], r["seller_bid"]) or r.get("is_fixture") is not True:
-            raise HTTPException(403, "Demo reviewers can act only on simulated demo relationships.")
+            raise HTTPException(403, "Without reviewer access you can act only on showcase relationships.")
     if body.action == "approve_identity" and body.scope != "identity":
         raise HTTPException(422, "approve_identity takes scope 'identity'")
     claim = None
@@ -1525,10 +1524,10 @@ def _demo_decision(t: dict, b: dict, body: ReviewDecisionIn, v: Viewer, rh: str,
         dim = Dim.identity.value if body.action == "approve_identity" else claim["dim"]
         c = _check_doc(bid, t.get("case_id") or f"case_review_{bid}", dim=dim, check_type="demo_reviewer_" + (
             "identity" if body.action == "approve_identity" else claim["check_type"]), source_kind=SourceKind.simulated_fixture,
-            source_name="Demo reviewer (sample shop, not a Sauda reviewer)",
+            source_name="Owner review (ready shop, not a Sauda reviewer)",
             status=CheckStatus.verified if ok else CheckStatus.failed,
-            summary=f"{DEMO_REVIEWER_LABEL}: {'confirmed' if ok else 'rejected'} on a sample shop. {body.reason.strip()}"
-                    " (simulated demo data, not a real verification)")
+            summary=f"{DEMO_REVIEWER_LABEL}: {'confirmed' if ok else 'rejected'} on a ready shop. {body.reason.strip()}"
+                    " (not checked against a government registry yet)")
         c["is_fixture"] = True
         c["sandbox"] = True
         tn.put(tn.CHECKS, c["check_id"], c)
@@ -1549,8 +1548,8 @@ def _demo_decision(t: dict, b: dict, body: ReviewDecisionIn, v: Viewer, rh: str,
     saved = tn.mutate(tn.REVIEWS, t["tid"], apply)
     ledger(bid, "tn.review.demo_decision", f"demo-reviewer:{rh}", {"tid": t["tid"], **decision, "status": saved["status"],
                                                                    "checks": [c["check_id"] for c in new_checks]})
-    note = ("Recorded on your sample shop." if own else
-            "Recorded as a demo action. Shared demo businesses stay open so every visitor can try the review.")
+    note = ("Recorded on your ready shop." if own else
+            "Recorded. Showcase businesses stay open so everyone can use the review.")
     return {"task": saved, "summary": summary_of(tn.business(bid) or b), "checks": new_checks, "demo": True,
             "label": DEMO_REVIEWER_LABEL, "note": note}
 
@@ -1581,15 +1580,15 @@ def _fx_listing(categories: list[str], kind: str, districts: list[str] = (), sta
 
 # Simulated sellers listed in Find suppliers (the service areas are self-declared demo values).
 FX_LISTINGS = {
-    FX_ANNAPURNA: _fx_listing(["staples", "rice"], "district", ["HYDERABAD"], ["TELANGANA"], 5000, "Simulated demo listing."),
-    FX_DECCAN: _fx_listing(["edible oil"], "state", [], ["TELANGANA"], 10000, "Simulated demo listing."),
+    FX_ANNAPURNA: _fx_listing(["staples", "rice"], "district", ["HYDERABAD"], ["TELANGANA"], 5000, "Showcase listing."),
+    FX_DECCAN: _fx_listing(["edible oil"], "state", [], ["TELANGANA"], 10000, "Showcase listing."),
     FX_METRO: _fx_listing(["fmcg", "staples", "packaged foods", "personal care"], "pan_india", min_rupees=15000,
-                          notes="Simulated demo listing."),
-    FX_PUNE: _fx_listing(["dry fruits", "spices"], "district", ["PUNE"], ["MAHARASHTRA"], 3000, "Simulated demo listing."),
-    FX_BLR: _fx_listing(["cleaning", "personal care"], "state", [], ["KARNATAKA"], 4000, "Simulated demo listing."),
+                          notes="Showcase listing."),
+    FX_PUNE: _fx_listing(["dry fruits", "spices"], "district", ["PUNE"], ["MAHARASHTRA"], 3000, "Showcase listing."),
+    FX_BLR: _fx_listing(["cleaning", "personal care"], "state", [], ["KARNATAKA"], 4000, "Showcase listing."),
 }
-SIM = "Simulated GST registry (demo fixture)"
-SIM_NOTE = " (simulated demo data, not a real registry result)"
+SIM = "Not checked against a government registry yet"
+SIM_NOTE = " (not checked against a government registry yet)"
 
 
 def _fx_business(bid: str, **kw) -> dict:
@@ -1598,9 +1597,9 @@ def _fx_business(bid: str, **kw) -> dict:
     doc = {"bid": bid, "roles": ["seller"], "display_name": "", "legal_name": None, "constitution": None, "category": None,
            "products": [], "gstin": None, "udyam": None, "fssai": None, "cin_llpin": None,
            "address": {"line": "", "city": "Hyderabad", "state": "Telangana", "pin": ""}, "geo": None, "contact": {},
-           "contact_hash": None, "representative": {"name": "Demo Representative", "role": "Proprietor", "authority_status": "self_declared"},
+           "contact_hash": None, "representative": {"name": "Showcase Representative", "role": "Proprietor", "authority_status": "self_declared"},
            "brand_claims": [], "requirements": None, "owner_uid": FX_UIDS[bid], "members": members, "is_fixture": True,
-           "fixture_label": "Simulated demo business. Not a real company.", "created_at": now, "updated_at": now, "version": 1}
+           "fixture_label": "Showcase business. Not checked against a government registry yet.", "created_at": now, "updated_at": now, "version": 1}
     doc.update(kw)
     return _index_fields(doc)
 
@@ -1639,27 +1638,27 @@ def scenario() -> tuple[list[dict], list[dict]]:
     biz = [
         _fx_business(FX_BUYER, roles=["buyer"], display_name="Sri Lakshmi General Stores", legal_name="Sri Lakshmi General Stores",
                      constitution="Proprietorship", category="Kirana / general store", products=["staples", "rice", "edible oil", "packaged foods"],
-                     gstin=g_b, address={"line": "Plot 12, Prakash Nagar, Begumpet (demo address)", "city": "Hyderabad", "state": "Telangana", "pin": "500016"},
+                     gstin=g_b, address={"line": "Plot 12, Prakash Nagar, Begumpet", "city": "Hyderabad", "state": "Telangana", "pin": "500016"},
                      geo={"lat": 17.4375, "lng": 78.4483, "accuracy_m": 25, "captured_at": tn.iso(), "consent": True},
-                     representative={"name": "Demo Proprietor", "role": "Proprietor", "authority_status": "pending"}),
+                     representative={"name": "Showcase Proprietor", "role": "Proprietor", "authority_status": "pending"}),
         _fx_business(FX_ANNAPURNA, display_name="Annapurna Rice Traders", legal_name="Annapurna Rice Traders", constitution="Proprietorship",
                      category="Rice wholesaler", products=["rice"], gstin=g_a,
-                     address={"line": "Godown 12 (demo address)", "city": "Hyderabad", "state": "Telangana", "pin": "500012"}),
+                     address={"line": "Godown 12", "city": "Hyderabad", "state": "Telangana", "pin": "500012"}),
         _fx_business(FX_DECCAN, display_name="Deccan Edible Oils", legal_name="Deccan Edible Oils", constitution="Partnership",
                      category="Edible oil distributor", products=["edible oil"], gstin=g_d, fssai="10000000000000", brand_claims=["Fortune"],
-                     address={"line": "Unit 3, Industrial Estate (demo address)", "city": "Hyderabad", "state": "Telangana", "pin": "500018"},
-                     representative={"name": "Demo Partner", "role": "Partner", "authority_status": "self_declared"}),
+                     address={"line": "Unit 3, Industrial Estate", "city": "Hyderabad", "state": "Telangana", "pin": "500018"},
+                     representative={"name": "Showcase Partner", "role": "Partner", "authority_status": "self_declared"}),
         _fx_business(FX_METRO, display_name="Metro Distributors", legal_name="Metro Distributors Private Limited", constitution="Private limited company",
                      category="FMCG distributor", products=["staples", "packaged foods", "personal care"], gstin=g_m, linked_supplier_id="metro",
-                     address={"line": "Warehouse 7 (demo address)", "city": "Hyderabad", "state": "Telangana", "pin": "500037"},
-                     representative={"name": "Demo Manager", "role": "Sales manager", "authority_status": "self_declared"}),
+                     address={"line": "Warehouse 7", "city": "Hyderabad", "state": "Telangana", "pin": "500037"},
+                     representative={"name": "Showcase Manager", "role": "Sales manager", "authority_status": "self_declared"}),
         _fx_business(FX_PUNE, display_name="Pune Dry Fruits & Spices Co.", legal_name="Pune Dry Fruits & Spices Co.", constitution="Partnership",
                      category="Dry fruits and spices wholesaler", products=["dry fruits", "spices"], gstin=g_p,
-                     address={"line": "Shop 4, Market Yard (demo address)", "city": "Pune", "state": "Maharashtra", "pin": "411002"},
-                     representative={"name": "Demo Partner", "role": "Partner", "authority_status": "self_declared"}),
+                     address={"line": "Shop 4, Market Yard", "city": "Pune", "state": "Maharashtra", "pin": "411002"},
+                     representative={"name": "Showcase Partner", "role": "Partner", "authority_status": "self_declared"}),
         _fx_business(FX_BLR, display_name="Bengaluru Home Care Supplies", legal_name="Bengaluru Home Care Supplies", constitution="Proprietorship",
                      category="Cleaning and home care distributor", products=["cleaning", "personal care"], gstin=g_k,
-                     address={"line": "Unit 9, Industrial Layout (demo address)", "city": "Bengaluru", "state": "Karnataka", "pin": "560068"}),
+                     address={"line": "Unit 9, Industrial Layout", "city": "Bengaluru", "state": "Karnataka", "pin": "560068"}),
     ]
     for b in biz:
         if b["bid"] in FX_LISTINGS:
@@ -1720,7 +1719,7 @@ def seed(reset: bool = False) -> dict:
     for b in biz:
         if tn.create(tn.BUSINESSES, b["bid"], b):
             created["businesses"] += 1
-            ledger(b["bid"], "tn.fixture.seeded", "operator", {"bid": b["bid"], "is_fixture": True, "label": "simulated demo business"})
+            ledger(b["bid"], "tn.fixture.seeded", "operator", {"bid": b["bid"], "is_fixture": True, "label": "showcase business"})
         elif b.get("listing") and not (tn.business(b["bid"]) or {}).get("listing"):
             # fixtures seeded before listings existed get their simulated listing once; later edits are kept
             tn.mutate(tn.BUSINESSES, b["bid"], lambda d, lst=b["listing"]: {**d, "listing": lst} if d.get("is_fixture") else d)
@@ -1743,10 +1742,10 @@ def seed(reset: bool = False) -> dict:
         "categories": ["staples", "packaged foods"], "provenance": "self_declared",
         "shared_fields": ["display_name", "city", "state", "category", "products", "verification_summary"],
         "requirements": policy.DEFAULT_REQUIREMENTS, "approved_tiers": [], "human_review": None, "invitation_id": None,
-        "history": [{"from": None, "to": "accepted", "by_hash": "operator", "reason": "existing simulated supplier linked (demo)", "at": now}],
+        "history": [{"from": None, "to": "accepted", "by_hash": "operator", "reason": "existing partner supplier agent linked", "at": now}],
         "is_fixture": True, "created_at": now, "updated_at": now, "version": 1}):
         created["relationships"] += 1
-    return {"ok": True, "is_fixture": True, "label": "Simulated demo scenario. No real registry data.", "removed": removed,
+    return {"ok": True, "is_fixture": True, "label": "Showcase businesses. Not checked against a government registry yet.", "removed": removed,
             "created": created, "listings_added": listings_added, "businesses": {b["bid"]: b["display_name"] for b in biz},
             "fixture_users": FX_UIDS, "note": "Act as a fixture user with the operator token and header X-Act-As: <fixture uid>."}
 

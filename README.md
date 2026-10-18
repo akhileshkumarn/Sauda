@@ -23,6 +23,7 @@ Google Cloud AI Builder Cup 2026 · Theme: Retail & Commerce · Team **Inertia**
 2. [What Sauda does](#what-sauda-does)
 3. [Try it in 5 minutes](#try-it-in-5-minutes-judge-guide)
 4. [Architecture (HLD)](#architecture-hld)
+5. [Trust Network architecture](#trust-network-architecture)
 5. [Design principles](#design-principles)
 6. [Architecture decision records](#architecture-decision-records)
 7. [Low-level design](#low-level-design-lld)
@@ -64,7 +65,7 @@ Google Cloud AI Builder Cup 2026 · Theme: Retail & Commerce · Team **Inertia**
 | **Approval, then UPI** | One approval screen. Then a 10-minute cooling-off period, a purchase order and a UPI deep link and QR for the payee from the registry. | `services/confirm.py`, `services/orders.py`, `/confirm`, `/pay` |
 | **Hash-chained signed ledger** | Every plan, offer, verdict and decision is chained, KMS-signed and re-verifiable in the browser. A tamper demo is included. | `packages/sauda_ledger`, `/trust/[negotiationId]` |
 | **10-attack security console** | Ten scripted attacks, from prompt injection to ledger tampering, each with the layer that stopped it. Judges can also type their own attack. | `services/attack.py`, `/attack` |
-| **Sample shop and demo review console** | "Try with a sample shop" creates a personal simulated business in one tap. The demo reviewer console lets anyone act as the human reviewer on their own sample. | `trust_network_sandbox.py`, `/review` |
+| **Ready shop and review console** | "Explore a ready shop" opens Balaji Kirana & General Stores in one tap: a ready-made shop, set up and partially verified, with simulated registry results and a copy private to each user. The review console lets anyone act as the human reviewer on their own ready shop and the showcase businesses. | `trust_network_sandbox.py`, `/review` |
 
 **Languages.** English, Hindi, Telugu, Tamil, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia, Urdu, plus **Bhojpuri in beta**. Bhojpuri has no browser speech locale, so the app listens to it as Hindi. On 18 Oct 2026, typed restock and onboarding passed in every one of the 13 languages against Vertex Gemini. Gemini audio transcription passed with synthetic voices for English, Hindi, Telugu, Tamil and Kannada. Bengali passed with caveats. Malayalam, Marathi, Gujarati, Punjabi, Odia and Urdu had no test voice, so their audio path is untested. Browser speech recognition for the new languages still needs a real-microphone test. The full table is in [docs/VOICE_CONVERSATION.md](docs/VOICE_CONVERSATION.md#languages).
 
@@ -77,8 +78,8 @@ Open **https://saudaai.web.app** on a phone or laptop.
 | Step | Do this | What to look for |
 |---|---|---|
 | 1 | **Sign in with Google** | Any Google account works. Firebase Auth issues an ID token, and the buyer agent verifies it on every request. |
-| 2 | Open **Network** and tap **Try with a sample shop** | You get your own "Sample Kirana" (simulated). It reads *Partially verified (sample)*, and each check carries a source badge. |
-| 3 | **Find suppliers** | Search by area and send a request to connect to a demo supplier. Sample shops never appear in other people's search results. |
+| 2 | Open **Network** and tap **Explore a ready shop (Balaji Kirana & General Stores)** | You get your own private copy of the shop. It reads *Partially verified*, shows a "How to get fully verified" checklist, and each check carries a source badge. |
+| 3 | **Find suppliers** | Search by area and send a request to connect to a showcase supplier. Your ready shop never appears in other people's search results. |
 | 4 | **Restock**: speak or type an order | Pick your language. Try "10 atta, 20 Tata salt, 12 sunflower oil, keep under 8000", then "make salt 25". |
 | 5 | **Sign limits** | Review the budget, ceilings and maximum advance, then sign. The mandate is signed with Cloud KMS. |
 | 6 | **Watch the negotiation** | Three suppliers quote over A2A. QuickStock's injection, payee switch and advance demand are blocked live, and QuickStock is quarantined. |
@@ -91,7 +92,7 @@ Open **https://saudaai.web.app** on a phone or laptop.
 
 **What is simulated, and labelled on screen:**
 - The three supplier agents are demo distributors with real catalogues. Their strategies are published in [`suppliers/`](suppliers/).
-- Sample shops and their checks are simulated (`simulated_fixture`). A demo-reviewer decision is labelled "not a real verification".
+- The ready shop (Balaji Kirana & General Stores) is a ready-made shop with simulated registry results (`simulated_fixture`), shown on screen as "Not checked against a government registry yet". Each user gets a private copy. A review decision on it is labelled "Recorded review" and is not a real verification.
 - Payment is a real UPI link, capped at ₹1 for testing. The UPI reference (UTR) you enter is recorded as **claimed, not bank-verified**. Sauda never holds funds.
 - A supplier's VPA comes from the registry and is shown masked. It is a claimed payee, not one a bank has confirmed.
 - Festival uplift is a suggestion you can apply, not your sales history.
@@ -174,6 +175,102 @@ The deeper design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
+## Trust Network architecture
+
+How a business joins, gets verified and starts trading. Buyers (kirana stores) and suppliers (distributors and wholesalers) follow the same path, and one business can switch role or be both. Full detail: [docs/TRUST_NETWORK.md](docs/TRUST_NETWORK.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#4-trust-network).
+
+```mermaid
+flowchart TB
+  subgraph Join["1 · Join"]
+    J1["Talk to set up<br/>voice or text, 13 languages"]
+    J2["Invitation link<br/>shared on WhatsApp"]
+    J3["Explore a ready shop<br/>private copy per user"]
+  end
+  subgraph Onb["2 · Onboarding agent, /tn/onboarding"]
+    O1["Gemini asks one question at a time"]
+    O2["Code checks formats<br/>GSTIN, PIN, phone; refuses Aadhaar"]
+    O3["Model Armor screens every turn"]
+    O4["Read-back and explicit confirm"]
+  end
+  BIZ[("Business profile<br/>tn_businesses")]
+  subgraph Ver["3 · Verification: one check per dimension and source"]
+    V1["GSTIN checksum"]
+    V2["India Post PIN directory"]
+    V3["Google Maps geocode"]
+    V4["MCA company records<br/>data.gov.in"]
+    V5["Documents and shop photo<br/>read by Gemini, screened by Model Armor"]
+    V6["Business phone and email code<br/>Firebase Auth"]
+    V7["GST portal, MCA21, Udyam, FSSAI<br/>guided manual tasks"]
+  end
+  CK[("tn_checks")]
+  POL["Deterministic policy<br/>sauda_verify.policy, no scores"]
+  CAT{"Category per business"}
+  REV["Human review queue<br/>mismatches, credit, large orders"]
+  subgraph Net["4 · Trade"]
+    PRO["Redacted trust profile"]
+    DIS["Find verified suppliers<br/>district, state or all India"]
+    INV["Invitations"]
+    REL["Relationship<br/>requested or invited, then approved_for_trading"]
+    TIER["Seller approves a tier<br/>prepaid_small, prepaid_regular;<br/>credit and large_order need human review"]
+  end
+  RS["Restock: signed limits, A2A negotiation,<br/>approval, UPI, signed record"]
+  LED[("Per-business signed ledger")]
+
+  J1 --> O1 --> O2 --> O3 --> O4 --> BIZ
+  J2 --> O1
+  J3 --> BIZ
+  BIZ --> V1 & V2 & V3 & V4 & V5 & V6 & V7
+  V1 & V2 & V3 & V4 & V5 & V6 & V7 --> CK
+  CK --> POL --> CAT
+  CAT -->|"Verified or Partially verified"| PRO
+  CAT -->|"mismatch or conflict"| REV
+  REV -->|"decision with reason"| CK
+  PRO --> DIS
+  PRO --> INV
+  DIS --> REL
+  INV --> REL
+  REL --> TIER --> RS
+  BIZ -.-> LED
+  REL -.-> LED
+  REV -.-> LED
+```
+
+**Nothing is blocked while checks finish.** A partially verified business can find suppliers, send and answer requests, list itself and restock on prepaid tiers. Only credit and large-order approvals wait for a person.
+
+### Buyer and supplier onboarding, end to end
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor B as Buyer, kirana owner
+  participant APP as owner-app
+  participant API as buyer-agent
+  participant G as Gemini and Model Armor
+  participant P as Verification providers
+  participant R as Reviewer
+  actor S as Supplier, distributor
+  B->>APP: Speaks shop name, structure, PIN, role, products
+  APP->>API: POST /tn/onboarding/{oid}/turns
+  API->>G: Extract fields, screen the text
+  G-->>API: Structured fields
+  API-->>APP: Next question in the owner's language
+  B->>APP: Confirms the read-back
+  APP->>API: POST /tn/onboarding/{oid}/confirm
+  API->>P: GSTIN, PIN, Maps, MCA, documents, contact code
+  P-->>API: One check per dimension and source
+  API-->>APP: Partially verified, nothing blocked
+  S->>APP: Same onboarding with role seller
+  APP->>API: PUT /tn/businesses/{bid}/listing with service areas
+  B->>APP: Find verified suppliers, request to connect
+  APP->>API: POST /tn/connect
+  API-->>S: Request with the buyer's redacted trust profile
+  S->>APP: Accept and approve a tier
+  APP->>API: POST /tn/relationships/{rid}/decision
+  API->>API: Policy check against the tier
+  API->>R: Review task when credit or a large order is asked
+  API-->>B: approved_for_trading, restock can now use this supplier
+```
+
 ## Design principles
 
 | # | Principle | Why | Where in code |
@@ -185,9 +282,9 @@ The deeper design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | 5 | **Verification by dimension, no trust score** | One number hides why a business is or is not trusted. | `sauda_verify/models.py` `Dim`, `CheckStatus`, `SourceKind`. `policy.py` rolls up each dimension. |
 | 6 | **Human review for credit and large orders** | Some decisions are too costly to automate. | `policy.py` `high_value_relationship` routing. R10 `OWNER_APPROVAL` on every order. |
 | 7 | **Idempotency everywhere** | Phones retry, and networks drop. | R11 `DUPLICATE`, create-only order ids, a transaction on `confirmations`, `client_turn_id` on voice turns, idempotent `/tn/sandbox/start` |
-| 8 | **Append-only signed records** | Evidence must survive disputes and tampering. | `sauda_ledger` (hash chain, v2 full-event signatures, KMS-signed chain head). Ledger entries are kept even when a sample shop is deleted. |
+| 8 | **Append-only signed records** | Evidence must survive disputes and tampering. | `sauda_ledger` (hash chain, v2 full-event signatures, KMS-signed chain head). Ledger entries are kept even when a ready shop is removed. |
 | 9 | **Privacy by redaction and masking** | Kirana owners' data is personal data. | VPAs and contacts are masked and HMAC'd, Aadhaar is never stored, no audio is stored, logs contain no transcript text (`TRUST_NETWORK.md` "Privacy and retention") |
-| 10 | **Never blocked: progressive trust** | A first-time user must be able to act. | Sample shop, read-only discovery without a profile, self-declared checks shown as such |
+| 10 | **Never blocked: progressive trust** | A first-time user must be able to act. | Ready shop, read-only discovery without a profile, self-declared checks shown as such |
 | 11 | **Low cost, scale to zero** | A kirana product must run on cents. | Cloud Run `--min-instances 0` for owner-app and suppliers, a shared Python image, a 300 s catalogue cache and 1800 s price cache |
 
 ---
@@ -502,7 +599,7 @@ The repository has no measured cost figures, so this section is qualitative. Own
 |---|---|
 | Product set (Open Food Facts), government mandi reference prices with source and date, KMS keys, Model Armor screening, the ledger, Cloud Run deployment, Firebase sign-in, the GSTIN checksum, PIN directory checks and geocoding | The three supplier agents and their strategies |
 | A real UPI link to the registered payee | Payment capped at ₹1 for testing. The UTR is **claimed, not bank-verified**. |
-| Trust Network policy and the review workflow | Sample shops, demo fixtures and demo-reviewer decisions. GST provider calls run in sandbox and are capped at `inconclusive`. |
+| Trust Network policy and the review workflow | Ready shops, showcase businesses and recorded review decisions. GST provider calls run in sandbox and are capped at `inconclusive`. |
 | | The savings baseline is the suppliers' opening quotes, and festival uplift is a stated assumption |
 
 **Model limits.**

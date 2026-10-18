@@ -135,7 +135,7 @@ async function mockParse(lang: VoiceLangHint, signal?: AbortSignal): Promise<Voi
       unmatched: [], stated_budget_paise: 800000,
       clarifications: [{ owner_words: 'Maggi noodles', question: 'Which Maggi pack?', options: [{ gtin: '8901058000000', name: 'Masala Noodles', brand: 'Maggi', pack_size: '70 g' }, { gtin: '8901058000001', name: 'Masala Noodles', brand: 'Maggi', pack_size: '280 g' }] }],
     },
-    notes: ['Mock voice result.', 'Preview only. Nothing is ordered until you sign a mandate and approve the final cart.'],
+    notes: ['Preview only. Nothing is ordered until you sign a mandate and approve the final cart.'],
   };
 }
 

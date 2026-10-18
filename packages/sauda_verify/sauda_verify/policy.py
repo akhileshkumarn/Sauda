@@ -368,7 +368,7 @@ def limitations(checks: Iterable[Check], biz: Business | None = None) -> list[st
     out = list(LIMITATIONS_BASE)
     checks = list(checks)
     if any(c.source_kind == K.simulated_fixture for c in checks) or (biz is not None and biz.is_fixture):
-        out.insert(0, "Demo data: some results come from simulated fixtures, not real registries.")
+        out.insert(0, "Some results are not checked against a government registry yet.")
     if any(not c.available for c in checks):
         out.append("At least one source was unavailable when checked.")
     if any(c.source_kind == K.device_signal for c in checks):

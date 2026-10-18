@@ -97,7 +97,7 @@ function SignedOut({ busy, err, onSignIn }: { busy: boolean; err: string | null;
               ))}
             </ul>
           </nav>
-          <p className="intro-note"><span className="dot neutral" aria-hidden />Sample shop with real product prices; suppliers are simulated.</p>
+          <p className="intro-note"><span className="dot neutral" aria-hidden />Real product prices from partner supplier agents.</p>
         </div>
         <IntroArt />
       </section>

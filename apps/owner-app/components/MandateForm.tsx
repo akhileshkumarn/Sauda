@@ -96,7 +96,7 @@ export function MandateForm({ draft, lines, negotiationId, sid }: { draft: Draft
               );
             })}
           </div>
-          <span className="hint">Simulated suppliers · up to 3</span>
+          <span className="hint">Partner supplier agents · up to 3</span>
         </div>
 
         <div className="grid2 stack-narrow">

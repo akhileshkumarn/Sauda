@@ -64,7 +64,7 @@ def compute(shop_id: str) -> dict:
         "orders": orders_n,
         "last_negotiation_id": last,
         "baseline": "opening quotes (Plan B: no purchase history)",
-        "baseline_label": "Savings vs the suppliers' opening quotes (simulated distributors), not vs your past bills",
+        "baseline_label": "Savings vs the suppliers' opening quotes (partner supplier agents), not vs your past bills",
         "opening_cost_paise": opening,
         "realised_opening_paise": realised_opening,
         "realised_savings_paise": realised,

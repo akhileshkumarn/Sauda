@@ -93,7 +93,7 @@ export function ProfileMenu({ placement = 'down' }: { placement?: 'down' | 'up' 
                 <span className="pm-av" aria-hidden>{user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : initial}</span>
                 <span className="pm-id">
                   <span className="pm-name">{user.name}</span>
-                  {user.email ? <span className="pm-email">{user.email}</span> : <span className="pm-email">{MOCK ? 'Sample shop, no account' : 'Signed in'}</span>}
+                  {user.email ? <span className="pm-email">{user.email}</span> : <span className="pm-email">{MOCK ? 'Ready shop' : 'Signed in'}</span>}
                 </span>
               </div>
               <div className="pm-sep" role="separator" />

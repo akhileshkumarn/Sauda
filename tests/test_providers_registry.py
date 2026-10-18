@@ -144,13 +144,13 @@ def test_simulated_rows_are_labelled():
     for bid in simulated.DEMO_BUSINESSES:
         for r in SIMULATED.run(fixture(bid), {}):
             assert r.source_kind == SourceKind.simulated_fixture
-            assert "fixture" in r.source_name.lower() and "simulated" in r.summary.lower()
+            assert "not checked" in r.source_name.lower() and "government registry" in r.summary.lower()
 
 
 def test_demo_scenario_outcomes():
     sl = {r.check_type: r for r in SIMULATED.run(fixture("fx_sri_lakshmi"), {})}
     assert sl["gst_registry"].status == CheckStatus.partially_verified
-    assert sl["gst_registry"].source_name == "Simulated GST registry (demo fixture)"
+    assert sl["gst_registry"].source_name == "Not checked against a government registry yet"
     assert any(f.field == "trade_name" and f.observed == "SRI LAXMI GENERAL STORE" and f.match is None
                for f in sl["gst_registry"].fields)
     an = {r.check_type: r.status for r in SIMULATED.run(fixture("fx_annapurna_rice"), {})}

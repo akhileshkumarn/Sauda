@@ -137,8 +137,8 @@ def test_cards_have_no_private_fields_and_fixtures_labelled(dz):
                    "gstin", "members", "fx-user-", "contact", "customers", "\"address\":", "\"line\"", "pin"):
         assert secret not in text, secret
     for c in r.json()["results"]:
-        assert c["is_fixture"] is True and c["fixture_label"] == "Simulated (demo data)"
-        assert "simulated" in c["trust"]["category_text"].lower()
+        assert c["is_fixture"] is True and c["fixture_label"] == "Showcase business"
+        assert "showcase" in c["trust"]["category_text"].lower()
         assert {d["dim"] for d in c["trust"]["dims"]} == {"identity", "registration", "address", "operational", "representative",
                                                           "distribution_authority"}
         assert any(d["source_kind"] == "simulated_fixture" for d in c["trust"]["dims"])

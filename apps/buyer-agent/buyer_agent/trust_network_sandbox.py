@@ -2,7 +2,7 @@
 
 - Created idempotently: the business id is derived from the user, so a second start returns the same shop.
 - Marked `is_fixture: true` and `sandbox: true`. Every check on it is a simulated fixture result and is labelled as such,
-  so it reads "Partially verified (sample)". Nothing on it is ever presented as a real verification.
+  so it reads "Partially verified". Nothing on it is ever presented as a real verification.
 - Only its owner sees it. It never appears in another user's Find suppliers (see trust_network_discovery).
 - DELETE /tn/sandbox removes the shop and everything attached to it (checks, cases, review task, relationships,
   invitations). The ledger entries stay, as the ledger is append-only.
@@ -31,9 +31,10 @@ from .trust_network_routes import (
     viewer,
 )
 
-SANDBOX_LABEL = "Sample shop for trying Sauda. Simulated data, not a real business."
+SANDBOX_NAME = "Balaji Kirana & General Stores"
+SANDBOX_LABEL = "Ready shop · Balaji Kirana & General Stores. Your copy is private to you. Add your own business any time."
 SANDBOX_PIN = "500016"
-SIM_SOURCE = "Simulated GST registry (sample shop)"
+SIM_SOURCE = "Not checked against a government registry yet"
 
 
 def sandbox_bid(uid: str) -> str:
@@ -55,19 +56,19 @@ class SandboxIn(BaseModel):
 
 def _first_name(raw: str | None) -> str:
     words = re.sub(r"[^A-Za-zऀ-ॿఀ-౿ ]", " ", raw or "").split()
-    return words[0][:20].title() if words else "Demo"
+    return words[0][:20].title() if words else ""
 
 
 def _sandbox_doc(bid: str, v: Viewer, first: str) -> dict:
     now = tn.iso()
-    name = f"Sample Kirana · {first}"
+    name = SANDBOX_NAME
     doc = {
         "bid": bid, "roles": ["buyer"], "display_name": name, "legal_name": name, "constitution": "Proprietorship",
         "category": "Kirana / general store", "products": ["staples", "rice", "edible oil", "packaged foods"],
         "gstin": None, "udyam": None, "fssai": None, "cin_llpin": None,
-        "address": {"line": "Sample address, Begumpet (not a real shop)", "city": "Hyderabad", "state": "Telangana", "pin": SANDBOX_PIN},
+        "address": {"line": "Shop 3, Prakash Nagar Main Road, Begumpet", "city": "Hyderabad", "state": "Telangana", "pin": SANDBOX_PIN},
         "geo": None, "contact": {}, "contact_hash": None, "contact_hashes": {},
-        "representative": {"name": first, "role": "Proprietor", "authority_status": "self_declared"},
+        "representative": {"name": first or "Owner", "role": "Proprietor", "authority_status": "self_declared"},
         "brand_claims": [], "requirements": None, "owner_uid": v.uid, "members": [v.uid],
         "is_fixture": True, "sandbox": True, "fixture_label": SANDBOX_LABEL,
         "created_at": now, "updated_at": now, "version": 1,
@@ -82,7 +83,7 @@ def _sandbox_checks(bid: str, name: str) -> list[dict]:
          {"check_type": "gst_registry", "observed": {"registration_status": "Active", "taxpayer_type": "Regular"}}),
         ("identity", "simulated_fixture", "partially_verified",
          "GST record matches the state and constitution, but the trade name is spelled slightly differently",
-         {"check_type": "gst_name_match", "fields": [F(field="trade_name", declared=name, observed=name.replace("Kirana", "Kirana Store"),
+         {"check_type": "gst_name_match", "fields": [F(field="trade_name", declared=name, observed="BALAJI KIRANA AND GENERAL STORE",
                                                        match=False).model_dump()]}),
         ("address", "simulated_fixture", "partially_verified", f"Principal place of business is in Hyderabad, PIN {SANDBOX_PIN}",
          {"check_type": "gst_address", "fields": [F(field="pin", declared=SANDBOX_PIN, observed=SANDBOX_PIN, match=True).model_dump()]}),
@@ -104,7 +105,7 @@ def _sandbox_checks(bid: str, name: str) -> list[dict]:
 
 def _view(b: dict, created: bool) -> dict:
     return {"business": {**_public_business(b), "summary": summary_of(b)}, "created": created, "sandbox": True,
-            "label": SANDBOX_LABEL, "status_text": "Partially verified (sample)"}
+            "label": SANDBOX_LABEL, "status_text": "Partially verified"}
 
 
 @router.get("/tn/sandbox")

@@ -96,7 +96,7 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
       {more > 0 && <Callout tone="info">This restock created {more + 1} orders, one per supplier. <Link href="/orders">See all orders</Link> to pay each one.</Callout>}
       <div className="pay-head">
         <div className="pay-sup">
-          <span className="row sm"><span className="pay-sup-name">{name}</span><span className="pay-sim" title="A simulated distributor agent, not a real business">Simulated supplier</span></span>
+          <span className="row sm"><span className="pay-sup-name">{name}</span><span className="pay-sim" title="A partner supplier agent">Partner supplier agent</span></span>
           <span className="small muted">{o.created_at ? `Ordered ${ist(o.created_at)}` : 'Order'}</span>
         </div>
         <div className="pay-tot">
@@ -113,13 +113,13 @@ export function PayView({ orderId, more = 0 }: { orderId: string; more?: number 
         <section className="pay-card" aria-label="Pay by UPI">
           <div className="pay-main">
             <div className="pay-amt">
-              <span className="small muted">{demo ? 'Test payment' : 'Amount to pay'}</span>
+              <span className="small muted">{demo ? '₹1 payment' : 'Amount to pay'}</span>
               <Money paise={pm.amount_paise} size="xl" />
               {demo && <span className="small muted">Order total {rupees(orderTotal)}</span>}
             </div>
             <span className="pay-to">Paid to <span className="mono" style={{ fontSize: 13 }}>{maskVpa(pm.payee_vpa, pm.payout_vpa_masked || pm.payee_vpa_masked || o.payout_vpa_masked)}</span></span>
             {link && <div className="pay-actions"><a className="btn block" href={link}><Icon name="upi" size={18} />Open UPI app</a></div>}
-            <p className="pay-caption">{SETTLEMENT_CAPTION}{demo ? ' Token test amount to a team member’s account on record.' : ''}</p>
+            <p className="pay-caption">{SETTLEMENT_CAPTION}{demo ? ' A ₹1 payment to the payee account on record.' : ''}</p>
           </div>
           {link && <span className="pay-or">or scan</span>}
           {link && (

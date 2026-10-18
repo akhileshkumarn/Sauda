@@ -2,12 +2,12 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ist } from '@/lib/format';
-import { TIER_WORD, absoluteUrl, categoryWord, dimWord, getProfile, listRelationships, readinessList, requirementWord } from '@/lib/network';
+import { TIER_WORD, absoluteUrl, categoryWord, dimWord, getProfile, listRelationships, readinessList, requirementWord, sourceWord } from '@/lib/network';
 import type { TnReadiness } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 import type { TnProfile } from '@/lib/types';
 import { ErrorState, Icon, SectionHead, Skeleton, StatusPill } from '../ui';
-import { CheckStatus, Limitations, SimulatedNote, SourceBadge, hasSimulated } from './shared';
+import { CheckStatus, Limitations, SourceBadge } from './shared';
 import { WhatsAppShare } from './SampleShop';
 
 const INDEPENDENT = new Set(['official_registry', 'authorised_provider', 'human_review', 'uploaded_evidence', 'device_signal']);
@@ -47,7 +47,6 @@ function Body({ p, own }: { p: TnProfile; own: boolean }) {
   const simulated = live.filter((r) => r.source_kind === 'simulated_fixture');
   const declared = live.filter((r) => !independent.includes(r) && !simulated.includes(r));
   const ready = readinessList(p.readiness);
-  const sim = p.is_fixture || hasSimulated(rows);
 
   return (
     <>
@@ -63,7 +62,6 @@ function Body({ p, own }: { p: TnProfile; own: boolean }) {
           <WhatsAppShare business={p.display_name} link={shareLink} label="Share profile on WhatsApp"
             text={`${p.display_name} on Sauda: see its verification summary. The link opens after you sign in, and shows only what the business chose to share: ${shareLink}`} /></div>
       </div>
-      <SimulatedNote show={sim} />
 
       <section className="stack sm" aria-labelledby="claims-h">
         <SectionHead title={<span id="claims-h">Who they say they are</span>} />
@@ -77,7 +75,7 @@ function Body({ p, own }: { p: TnProfile; own: boolean }) {
       </section>
 
       <Group title="Independently checked" empty="Nothing has been confirmed by an independent source yet." rows={independent} />
-      {simulated.length > 0 && <Group title="From demo records (simulated)" empty="" rows={simulated} />}
+      {simulated.length > 0 && <Group title="Not checked against a government registry yet" empty="" rows={simulated} />}
       <Group title="Self-declared or still pending" empty="Nothing left self-declared." rows={declared} />
 
       {p.pending_review && p.pending_review.length > 0 && (
@@ -126,7 +124,7 @@ function Group({ title, rows, empty }: { title: string; rows: Row[]; empty: stri
                 <p className="dim-sum">{r.summary || dimWord(r.dim).help}</p>
                 <div className="dim-meta" style={{ paddingBottom: 8 }}>
                   <SourceBadge kind={r.source_kind} name={r.source_name} />
-                  {r.source_name && <span className="break">{r.source_name}</span>}
+                  {r.source_name && r.source_name !== sourceWord(r.source_kind) && <span className="break">{r.source_name}</span>}
                   {r.checked_at && <span>{ist(r.checked_at)}</span>}
                 </div>
               </div>

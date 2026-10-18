@@ -23,13 +23,13 @@ def test_sandbox_is_idempotent_labelled_and_partially_verified(sb):
     b = start(sb, "judge1", "Someone Else")
     biz = a["business"]
     assert a["created"] is True and b["created"] is False and b["business"]["bid"] == biz["bid"]
-    assert biz["display_name"] == "Sample Kirana · Priya" and biz["is_fixture"] and biz["sandbox"]
+    assert biz["display_name"] == "Balaji Kirana & General Stores" and biz["is_fixture"] and biz["sandbox"]
     assert biz["address"]["pin"] == "500016" and biz["members"] == ["judge1"]
-    assert a["status_text"] == "Partially verified (sample)"
+    assert a["status_text"] == "Partially verified"
     assert biz["summary"]["category"] not in ("identity_confirmed", "evidence_reviewed", "ready_for_counterparty_review")
     checks = sb.client.get(f"/tn/businesses/{biz['bid']}/checks", headers=auth("judge1")).json()
     assert checks and all(c["source_kind"] in ("simulated_fixture", "self_declared") for c in checks)
-    assert all("simulated" in c["summary"] for c in checks if c["source_kind"] == "simulated_fixture")
+    assert all("government registry" in c["summary"] for c in checks if c["source_kind"] == "simulated_fixture")
     # another user cannot read it and gets their own
     assert sb.client.get(f"/tn/businesses/{biz['bid']}", headers=auth("judge2")).status_code == 404
     assert start(sb, "judge2")["business"]["bid"] != biz["bid"]
@@ -112,9 +112,9 @@ def test_demo_decisions_are_labelled_and_need_a_reason(sb):
                                                               "reason": "Sample: name variant is the same shop"}, headers=auth("judge1"))
     assert r.status_code == 200, r.text
     j = r.json()
-    assert j["demo"] and j["label"] == "Demo reviewer action" and j["task"]["decisions"][-1]["demo"] is True
+    assert j["demo"] and j["label"] == "Recorded review" and j["task"]["decisions"][-1]["demo"] is True
     assert j["task"]["status"] == "approved"
-    assert j["checks"][0]["source_kind"] == "simulated_fixture" and "not a real verification" in j["checks"][0]["summary"]
+    assert j["checks"][0]["source_kind"] == "simulated_fixture" and "government registry" in j["checks"][0]["summary"]
     assert "tn.review.demo_decision" in sb.ledger.types(f"biz-{bid}")
     # shared fixtures: recorded only, task stays open for the next visitor
     f = sb.client.post("/review/tasks/rv_fx_buyer_srilakshmi/decision", json={"action": "approve_identity", "scope": "identity",

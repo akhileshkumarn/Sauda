@@ -32,18 +32,18 @@ export function useStartSample(onReady?: (bid: string) => void) {
       if (onReady) onReady(r.business.bid);
       else router.push(`/network/business/${encodeURIComponent(r.business.bid)}`);
     } catch (e) {
-      setErr(`Could not open a sample shop just now. ${e instanceof Error ? e.message : ''} Try again, or fill in the form instead.`);
+      setErr(`Could not open the ready shop just now. ${e instanceof Error ? e.message : ''} Try again, or fill in the form instead.`);
     } finally { setBusy(false); }
   }
   return { start, busy, err };
 }
 
-export function SampleShopButton({ variant = 'secondary', block, onReady, label = 'Try with a sample shop' }:
+export function SampleShopButton({ variant = 'secondary', block, onReady, label = 'Explore a ready shop' }:
   { variant?: 'primary' | 'secondary' | 'ghost'; block?: boolean; onReady?: (bid: string) => void; label?: string }) {
   const s = useStartSample(onReady);
   return (
     <div className="stack xs" style={block ? { width: '100%' } : undefined}>
-      <Button variant={variant} block={block} busy={s.busy} busyLabel="Opening your sample shop…" onClick={s.start}><NIcon name="flask" size={16} />{label}</Button>
+      <Button variant={variant} block={block} busy={s.busy} busyLabel="Opening the ready shop…" onClick={s.start}><NIcon name="flask" size={16} />{label}</Button>
       {s.err && <Callout tone="bad">{s.err}</Callout>}
     </div>
   );
@@ -58,7 +58,7 @@ export function SampleShopLink({ onReady }: { onReady?: (bid: string) => void })
       <span>No shop to hand?</span>
       <button type="button" onClick={s.start} disabled={s.busy}
         style={{ background: 'none', border: 0, padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit', minHeight: 32 }}>
-        {s.busy ? 'Opening your sample shop…' : 'Try with a sample shop'}
+        {s.busy ? 'Opening the ready shop…' : 'Explore a ready shop'}
       </button>
       {s.err && <span role="alert">{s.err}</span>}
     </p>
@@ -107,15 +107,15 @@ export function SampleBanner({ onChanged }: { onChanged?: () => void }) {
     finally { setBusy(null); }
   }
   return (
-    <Callout tone="neutral" icon="flask" title="Sample shop">
-      <span>{SAMPLE_NOTE} Every feature works on it; checks are simulated, so it shows as Partially verified (sample).</span>
-      <span className="row sm wrap" style={{ marginTop: 8 }}>
-        <Button size="sm" variant="secondary" busy={busy === 'reset'} busyLabel="Resetting…" onClick={reset}>Start the sample again</Button>
+    <div className="row sm wrap small muted" role="note" style={{ alignItems: 'center' }}>
+      <span className="grow">{SAMPLE_NOTE}</span>
+      <span className="row sm wrap">
+        <Button size="sm" variant="secondary" busy={busy === 'reset'} busyLabel="Resetting…" onClick={reset}>Reset shop</Button>
         {confirmDel
-          ? <><Button size="sm" variant="secondary" busy={busy === 'delete'} busyLabel="Deleting…" onClick={del}>Yes, delete it</Button>
+          ? <><Button size="sm" variant="secondary" busy={busy === 'delete'} busyLabel="Removing…" onClick={del}>Yes, remove it</Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirmDel(false)}>Keep it</Button></>
-          : <Button size="sm" variant="ghost" onClick={() => setConfirmDel(true)}>Delete sample shop</Button>}
+          : <Button size="sm" variant="ghost" onClick={() => setConfirmDel(true)}>Remove shop</Button>}
       </span>
-    </Callout>
+    </div>
   );
 }

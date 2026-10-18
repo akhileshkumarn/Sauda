@@ -36,7 +36,7 @@ export function Nav() {
   ];
   const networkSub: Item[] | undefined = [
     { href: '/network', label: 'My network', match: (p) => p.startsWith('/network') || p.startsWith('/invite') },
-    { href: '/review', label: rv.reviewer ? 'Review' : 'Review · Demo', match: (p) => p.startsWith('/review') },
+    { href: '/review', label: rv.reviewer ? 'Review' : 'Review', match: (p) => p.startsWith('/review') },
   ];
   const tabs: Tab[] = [
     { href: '/dashboard', label: 'Home', icon: 'home', match: (p) => p === '/dashboard' },
@@ -61,7 +61,7 @@ export function Nav() {
         </Link>
         <Link href="/network" className="sb-shop" title="Business profile and verification">
           <span className="sb-shop-k">Shop</span>
-          <span className="sb-shop-v">{MOCK ? 'Sample kirana' : 'Your shop'}</span>
+          <span className="sb-shop-v">{MOCK ? 'Your shop' : 'Your shop'}</span>
           <span className="sb-shop-go" aria-hidden><Icon name="chev" size={14} /></span>
         </Link>
         <nav className="sb-nav" aria-label="Main">
