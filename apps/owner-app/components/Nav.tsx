@@ -7,7 +7,7 @@ import { lastNegotiationId } from '@/lib/session';
 import { Icon } from './ui';
 import { ProfileMenu } from './ProfileMenu';
 import { BrandMark } from './BrandMark';
-import { useIsReviewer } from '@/lib/network';
+import { useReviewerMode } from '@/lib/network';
 
 type Item = { href: string; label: string; match: (p: string) => boolean };
 type Tab = Item & { icon: string; sub?: Item[] };
@@ -26,7 +26,7 @@ export function Nav() {
   const path = usePathname() || '/';
   const [nid, setNid] = useState(DEFAULT_NEGOTIATION_ID);
   useEffect(() => { setNid(lastNegotiationId() || DEFAULT_NEGOTIATION_ID); }, [path]);
-  const reviewer = useIsReviewer();
+  const rv = useReviewerMode();
   const trustHref = nid ? `/trust/${encodeURIComponent(nid)}` : '/trust/latest';
 
   const trustSub: Item[] = [
@@ -34,12 +34,12 @@ export function Nav() {
     { href: '/attack', label: 'Security tests', match: (p) => p.startsWith('/attack') },
     { href: `/savings/${SHOP_ID}`, label: 'Savings', match: (p) => p.startsWith('/savings') },
   ];
-  const networkSub: Item[] | undefined = reviewer ? [
+  const networkSub: Item[] | undefined = [
     { href: '/network', label: 'My network', match: (p) => p.startsWith('/network') || p.startsWith('/invite') },
-    { href: '/review', label: 'Review', match: (p) => p.startsWith('/review') },
-  ] : undefined;
+    { href: '/review', label: rv.reviewer ? 'Review' : 'Review · Demo', match: (p) => p.startsWith('/review') },
+  ];
   const tabs: Tab[] = [
-    { href: '/', label: 'Home', icon: 'home', match: (p) => p === '/' },
+    { href: '/dashboard', label: 'Home', icon: 'home', match: (p) => p === '/dashboard' },
     { href: '/restock', label: 'Restock', icon: 'cart', match: (p) => p.startsWith('/restock') || p.startsWith('/mandate') || p.startsWith('/confirm') },
     { href: '/orders', label: 'Orders', icon: 'box', match: (p) => p.startsWith('/orders') || p.startsWith('/pay') },
     { href: '/network', label: 'Network', icon: 'link', match: inNetwork, sub: networkSub },
@@ -48,13 +48,15 @@ export function Nav() {
   const cur = (m: boolean) => (m ? 'page' as const : undefined);
   const mobileSub = inTrust(path) ? { label: 'Trust', items: trustSub } : networkSub && inNetwork(path) ? { label: 'Network', items: networkSub } : null;
 
+  if (path === '/') return null; // the public landing page has its own header
+
   return (
     <>
       <a className="skip" href="#main">Skip to content</a>
 
       {/* desktop sidebar */}
       <aside className="sidebar" aria-label="Sauda">
-        <Link href="/" className="brand sb-brand" aria-label="Sauda home">
+        <Link href="/dashboard" className="brand sb-brand" aria-label="Sauda home">
           <BrandMark size={30} />
           <span className="wordmark">SAUDA</span>
         </Link>
@@ -94,7 +96,7 @@ export function Nav() {
       {/* mobile top bar */}
       <header className="topbar">
         <div className="topbar-in">
-          <Link href="/" className="brand" aria-label="Sauda home">
+          <Link href="/dashboard" className="brand" aria-label="Sauda home">
             <BrandMark size={28} />
             <span className="wordmark">SAUDA</span>
           </Link>

@@ -148,6 +148,7 @@ export function Onboard() {
         <Link href="/network" className="small muted row sm tn-back" style={{ minHeight: 32 }}><Icon name="chev" size={14} /><span>Network</span></Link>
         <h1 ref={head} tabIndex={-1} className="tn-onboard-h">{role === 'seller' ? 'Verify your supplier business' : 'Verify your business'}</h1>
         <p className="muted">Step {step + 1} of 5 · {STEPS[step]}. You can go back at any time; nothing is sent until the last step.</p>
+        {step === 0 && <Link href={`/network/onboard/voice?role=${role}`} className="small">Prefer to talk? Set up by voice</Link>}
       </div>
       <div className="tn-steps"><Steps steps={STEPS} current={step} label="Progress" /></div>
 

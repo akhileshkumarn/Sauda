@@ -2,12 +2,13 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ist } from '@/lib/format';
-import { TIER_WORD, categoryWord, dimWord, getProfile, listRelationships, readinessList, requirementWord } from '@/lib/network';
+import { TIER_WORD, absoluteUrl, categoryWord, dimWord, getProfile, listRelationships, readinessList, requirementWord } from '@/lib/network';
 import type { TnReadiness } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 import type { TnProfile } from '@/lib/types';
 import { ErrorState, Icon, SectionHead, Skeleton, StatusPill } from '../ui';
 import { CheckStatus, Limitations, SimulatedNote, SourceBadge, hasSimulated } from './shared';
+import { WhatsAppShare } from './SampleShop';
 
 const INDEPENDENT = new Set(['official_registry', 'authorised_provider', 'human_review', 'uploaded_evidence', 'device_signal']);
 
@@ -38,7 +39,8 @@ export function ProfileView({ bid }: { bid: string }) {
 
 function Body({ p, own }: { p: TnProfile; own: boolean }) {
   const s = p.summary;
-  const w = categoryWord(s?.category, p.roles);
+  const w = categoryWord(s?.category, p.roles, (p as { sandbox?: boolean }).sandbox);
+  const shareLink = absoluteUrl(`/network/business/${encodeURIComponent(p.bid)}/profile`);
   const rows = p.checks?.length ? p.checks : (s?.dimensions || []).map((d) => ({ ...d, check_id: d.dim, source_name: '' }));
   const live = rows.filter((r) => r.status !== 'not_applicable');
   const independent = live.filter((r) => r.source_kind && INDEPENDENT.has(r.source_kind) && ['verified', 'partially_verified'].includes(r.status));
@@ -57,7 +59,9 @@ function Body({ p, own }: { p: TnProfile; own: boolean }) {
           {p.address?.city || p.address?.state ? ` · ${[p.address.city, p.address.state].filter(Boolean).join(', ')}` : ''}
           {p.constitution ? ` · ${p.constitution.replace(/_/g, ' ')}` : ''}
         </p>
-        <div><StatusPill tone={w.tone} size="lg">{w.label}</StatusPill></div>
+        <div className="row sm wrap"><StatusPill tone={w.tone} size="lg">{w.label}</StatusPill>
+          <WhatsAppShare business={p.display_name} link={shareLink} label="Share profile on WhatsApp"
+            text={`${p.display_name} on Sauda: see its verification summary. The link opens after you sign in, and shows only what the business chose to share: ${shareLink}`} /></div>
       </div>
       <SimulatedNote show={sim} />
 

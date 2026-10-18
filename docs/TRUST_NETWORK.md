@@ -95,6 +95,8 @@ The first matching rule applies:
 5. Some non-identity dimension has been confirmed by a reviewer or uploaded evidence: **evidence_reviewed**.
 6. Otherwise: **identity_confirmed**.
 
+The label shown for `additional_review_required` is **"Partially verified"** (with what is left listed under it); a business with no checks yet shows "Verification pending".
+
 ### Review routing reasons
 
 Any of these reasons puts a business in the review queue. A reason drops out when a newer human-review check supersedes the check that raised it.
@@ -220,7 +222,8 @@ Buyers find suppliers who chose to be listed, check how far each one is verified
 
 `GET /tn/discover?bid=&q=&category=&scope=district|state|india&district=&state=&verified_only=true&limit=20&cursor=`
 
-- **Who:** the caller must be a member of a business with the `buyer` role, otherwise 403 `buyer_profile_required` (the app sends them to onboarding). `bid` picks one of several buyer businesses.
+- **Who:** any signed-in user. With a buying business, results are for that business (`bid` picks one of several). Without one, discovery is read-only: 200 with `viewer: null`, `viewer_needs_profile: true`, every card `connection: "none"`, and the area defaults to `scope=india` (or the state/district the viewer picks). Request to connect then opens a chooser: create your business profile, or try a sample shop.
+- **Never listed:** the viewer's own businesses and every sample shop (`sandbox: true`), whoever owns it.
 - **Default area:** the buyer's district and state come from its declared PIN via the PIN directory (the district matching the declared city when a PIN spans two).
 - **Scopes:**
   - `district`: sellers whose area covers the district: the district itself, the whole state, or all India.
@@ -325,6 +328,47 @@ Not built.
 - Which documents DigiLocker issues **to businesses** (as opposed to individuals), and whether GST or Udyam certificates are available that way, is UNVERIFIED.
 - A requester must onboard through API Setu partner registration before any pull is possible. Sauda has not done this.
 - Until both are settled, DigiLocker is not used, and nothing in the Trust Network claims a DigiLocker result.
+
+## Never blocked by verification status
+
+Verification status is information, never a gate on using the product. A business that is not fully confirmed shows "Partially verified" (or "Verification pending") in plain words, with the outstanding items, and can still:
+
+- browse Find suppliers (even with no business at all, read-only), send and answer connect requests, list itself as a supplier, switch buyer/seller roles, and manage relationships.
+
+What stays gated, by policy and on purpose: relationship approval tiers (credit, large orders) still need the requirements and, where set, a human reviewer. The app explains that hold as intended, not as an error. Real businesses keep the strict policy; nothing simulated ever counts toward a real business's readiness.
+
+## Sample shop (sandbox)
+
+"Try with a sample shop" gives any signed-in user a personal simulated buyer business, so the whole journey can be tried without real documents.
+
+| Endpoint | Behaviour |
+|---|---|
+| `POST /tn/sandbox/start` `{first_name?}` | Creates, idempotently, one shop per user: bid `sbx_<keyed hash of uid>`, `is_fixture: true`, `sandbox: true`, "Sample Kirana · {first name}", Hyderabad PIN 500016, owned by and visible only to the caller. Seeds simulated checks (registration verified, identity and address partially verified, representative self-declared), so it reads **Partially verified (sample)**, and opens its review task. A second call returns the same shop (`created: false`). |
+| `GET /tn/sandbox` | `{exists, business?}` for the caller. |
+| `DELETE /tn/sandbox` (or `POST /tn/sandbox/delete`) | Removes the caller's shop and its checks, cases, review task, relationships and invitations. Ledger entries stay (append-only). "Start the sample again" = delete + start. |
+
+- The role switch works on it (turning on selling, then listing), but a sample shop is never shown in anyone's Find suppliers and cannot be the target of a connect request.
+- A connect request from a sample shop to a demo supplier is a fixture relationship (`is_fixture: true`).
+- Every check on it is `simulated_fixture` (or self-declared) and says "simulated demo data". It is never presented as a real verification.
+
+## Demo review console
+
+`/review` is open to every signed-in user. `GET /review/me` returns `{reviewer, demo}`.
+
+- **Real reviewers** (`REVIEWER_UIDS` / `REVIEWER_EMAILS`, or the operator token) see and decide everything, unchanged.
+- **Everyone else is in demo mode:** the queue lists only tasks for shared demo fixtures (`fx_` businesses) and the caller's own sample shop. Opening or deciding any other task (a real business, or another user's sample shop) is **403**. Relationships shown in a demo task are fixture relationships only.
+- Demo decisions still need a reason. They are stored on the task with `demo: true, label: "Demo reviewer action"` and written to the ledger as `tn.review.demo_decision` by `demo-reviewer:<hash>`.
+  - On the caller's own sample shop they take effect (task status changes; an approve/reject adds a `simulated_fixture` check labelled "Demo reviewer ... not a real verification").
+  - On shared demo fixtures they are recorded only, so the shared tasks stay open for the next visitor.
+- The Network sub-nav always shows Review; non-reviewers see "Review · Demo".
+
+## Share on WhatsApp
+
+Sharing uses only the public deep link `https://wa.me/?text=<urlencoded text>`: no API, no credentials, nothing sent by Sauda.
+
+- When an invitation link is created (shown once), and after a connect request, a "Share on WhatsApp" button prefills: "{Business} invited you to trade on Sauda. Open this link to verify your business and connect: {link}". The link is the invitation link, or the relationship page for a connect request; both require sign-in.
+- The counterparty profile page has "Share profile on WhatsApp", linking to the profile route, which only a signed-in member, counterparty or reviewer can open.
+- The text carries only the display name and the link: never GSTIN, contacts, address or documents.
 
 ## Privacy and retention
 

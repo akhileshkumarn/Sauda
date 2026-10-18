@@ -207,23 +207,53 @@ export async function reviewDecision(tid: string, body: { action: TnReviewAction
   return req('POST', `/review/tasks/${encodeURIComponent(tid)}/decision`, { body });
 }
 
-let reviewerCache: boolean | null = null;
-/** True only when GET /review/queue answers 200 for this user. */
-export function useIsReviewer(): boolean {
-  const [ok, setOk] = useState<boolean>(reviewerCache === true);
+export type ReviewerMode = { reviewer: boolean; demo: boolean; note?: string | null };
+export async function reviewMe(): Promise<ReviewerMode> {
+  if (MOCK) return m(() => ({ reviewer: mock.mockMode() !== 'noreview', demo: mock.mockMode() === 'noreview', note: mock.mockMode() === 'noreview' ? DEMO_REVIEW_NOTE : null }), 50);
+  return req<ReviewerMode>('GET', '/review/me');
+}
+export const DEMO_REVIEW_NOTE = 'Demo mode: you can review only simulated demo businesses and your own sample shop. Real businesses are reviewed only by Sauda reviewers.';
+
+let reviewerCache: ReviewerMode | null = null;
+/** {reviewer, demo}: real reviewers (REVIEWER_EMAILS) see everything; anyone else gets the demo console on demo data only. */
+export function useReviewerMode(): ReviewerMode {
+  const [mode, setMode] = useState<ReviewerMode>(reviewerCache || { reviewer: false, demo: true });
   useEffect(() => {
-    if (reviewerCache !== null) { setOk(reviewerCache); return; }
+    if (reviewerCache !== null) { setMode(reviewerCache); return; }
     let live = true;
     (async () => {
-      if (MOCK) { reviewerCache = mock.mockMode() !== 'noreview'; }
-      else {
-        try { await req('GET', '/review/queue'); reviewerCache = true; } catch { reviewerCache = false; }
-      }
-      if (live) setOk(reviewerCache);
+      try { reviewerCache = await reviewMe(); } catch { reviewerCache = { reviewer: false, demo: true }; }
+      if (live) setMode(reviewerCache);
     })();
     return () => { live = false; };
   }, []);
-  return ok;
+  return mode;
+}
+/** True only for real Sauda reviewers. */
+export function useIsReviewer(): boolean { return useReviewerMode().reviewer; }
+
+// ---------------------------------------------------------------- sample shop (sandbox)
+export type SandboxView = { business: TnBusinessMine; created: boolean; sandbox: true; label: string; status_text: string };
+export async function sandboxStart(firstName?: string): Promise<SandboxView> {
+  if (MOCK) return m(() => mock.mockSandboxStart(firstName), 500);
+  return req<SandboxView>('POST', '/tn/sandbox/start', { body: { first_name: firstName || null } });
+}
+export async function sandboxDelete(): Promise<{ ok: boolean; removed: number; existed: boolean }> {
+  if (MOCK) return m(() => mock.mockSandboxDelete(), 400);
+  return req('POST', '/tn/sandbox/delete');  // same as DELETE /tn/sandbox
+}
+export const SAMPLE_NOTE = 'Sample shop: simulated data so you can try every step. It is not a real business and only you can see it.';
+
+// ---------------------------------------------------------------- WhatsApp share (public wa.me link, no API)
+export function whatsappHref(text: string): string { return `https://wa.me/?text=${encodeURIComponent(text)}`; }
+/** The only text ever shared: the business display name and a link the recipient must sign in to open. */
+export function inviteMessage(business: string, link: string): string {
+  return `${business} invited you to trade on Sauda. Open this link to verify your business and connect: ${link}`;
+}
+export function absoluteUrl(path: string): string {
+  if (/^https?:/.test(path)) return path;
+  const o = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${o}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
 // ---------------------------------------------------------------- active business
@@ -240,11 +270,12 @@ export const CATEGORY_WORD: Record<TnCategory, { label: string; tone: 'ok' | 'wa
   ready_for_counterparty_review: { label: 'Ready for supplier review', tone: 'ok' },
   identity_confirmed: { label: 'Identity confirmed', tone: 'ok' },
   evidence_reviewed: { label: 'Evidence reviewed', tone: 'ok' },
-  additional_review_required: { label: 'Additional review required', tone: 'warn' },
+  additional_review_required: { label: 'Partially verified', tone: 'warn' },
   verification_unsuccessful: { label: 'Verification unsuccessful', tone: 'bad' },
 };
-export function categoryWord(c: TnCategory | string | undefined, role?: TnRole[]): { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' } {
-  const w = CATEGORY_WORD[c as TnCategory] || { label: c ? String(c).replace(/_/g, ' ') : 'Not checked yet', tone: 'neutral' as const };
+export function categoryWord(c: TnCategory | string | undefined, role?: TnRole[], sample?: boolean): { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' } {
+  const w0 = CATEGORY_WORD[c as TnCategory] || { label: c ? 'Verification pending' : 'Not checked yet', tone: 'neutral' as const };
+  const w = sample ? { ...w0, label: `${w0.label} (sample)` } : w0;
   if (c === 'ready_for_counterparty_review' && role && role.includes('seller') && !role.includes('buyer')) return { ...w, label: 'Ready for buyer review' };
   return w;
 }

@@ -720,7 +720,7 @@ tnState.tasks = [
 const TN_DIM_ORDER = ['identity', 'registration', 'address', 'operational', 'representative', 'product_compliance', 'distribution_authority', 'trading_references', 'payment_details', 'operational_capability'];
 const TN_CAT_LABEL: Record<string, string> = {
   identity_confirmed: 'Identity confirmed', evidence_reviewed: 'Evidence reviewed', ready_for_counterparty_review: 'Ready for supplier review',
-  additional_review_required: 'Additional review required', verification_unsuccessful: 'Verification unsuccessful',
+  additional_review_required: 'Partially verified', verification_unsuccessful: 'Verification unsuccessful',
 };
 
 function tnSummaryFor(bid: string): TnSummary {
@@ -754,9 +754,39 @@ function tnErr(status: number, code: string, message: string, extra: Record<stri
 }
 function tnMaybeFail() { if (mockMode() === 'error') throw Object.assign(new Error('Failed to fetch'), { status: 0 }); }
 
+const SBX = 'sbx_mock';
+export function mockSandboxStart(first?: string) {
+  const name = (first || 'Demo').split(/\s+/)[0] || 'Demo';
+  let created = false;
+  if (!tnState.businesses[SBX]) {
+    created = true;
+    tnState.businesses[SBX] = tnBiz({
+      bid: SBX, roles: ['buyer'], display_name: `Sample Kirana · ${name}`, legal_name: `Sample Kirana · ${name}`, constitution: 'proprietorship',
+      category: 'kirana', products: ['Staples', 'Rice', 'Edible oil'], gstin: '',
+      address: { line: 'Sample address, Begumpet (not a real shop)', city: 'Hyderabad', state: 'Telangana', pin: '500016' },
+      representative: { name, role: 'Proprietor', authority_status: 'self_declared' },
+      is_fixture: true, sandbox: true, fixture_label: 'Sample shop for trying Sauda. Simulated data, not a real business.',
+    } as Partial<TnBusiness> as TnBusiness);
+    tnState.checks[SBX] = clone(tnState.checks.fx_lakshmi || []).map((c) => ({ ...c, business_id: SBX, check_id: `${c.check_id}_sbx` }));
+    if (!tnState.tasks.find((t) => t.bid === SBX)) {
+      tnState.tasks.push({ tid: `rv_${SBX}`, bid: SBX, case_id: `case_${SBX}`, reasons: ['Trade name differs from the GST record'], status: 'open', decisions: [],
+        created_at: new Date().toISOString(), display_name: `Sample Kirana · ${name}`, is_fixture: true, sandbox: true });
+    }
+  }
+  return { business: { ...clone(tnState.businesses[SBX]), summary: tnSummaryFor(SBX) }, created, sandbox: true as const,
+    label: 'Sample shop for trying Sauda. Simulated data, not a real business.', status_text: 'Partially verified (sample)' };
+}
+export function mockSandboxDelete() {
+  const existed = !!tnState.businesses[SBX];
+  delete tnState.businesses[SBX]; delete tnState.checks[SBX];
+  tnState.tasks = tnState.tasks.filter((t) => t.bid !== SBX);
+  return { ok: true, removed: existed ? 3 : 0, existed };
+}
+
 export function mockTnMine(): TnBusinessMine[] {
   tnMaybeFail();
-  if (mockMode() === 'new') return [];
+  const sbx = tnState.businesses[SBX] ? [{ ...clone(tnState.businesses[SBX]), summary: tnSummaryFor(SBX) }] : [];
+  if (mockMode() === 'new' || mockMode() === 'nobuyer') return sbx;
   if (mockMode() === 'seller') return [{ ...clone(tnState.businesses.fx_annapurna), summary: tnSummaryFor('fx_annapurna') }];
   return [{ ...clone(tnState.businesses.fx_lakshmi), summary: tnSummaryFor('fx_lakshmi') }]
     .concat(Object.values(tnState.businesses).filter((b) => !b.bid.startsWith('fx_')).map((b) => ({ ...clone(b), summary: tnSummaryFor(b.bid) })));
@@ -871,7 +901,11 @@ export function mockTnAccept(_token: string, bid: string): TnRelationship {
   tnState.relationships.push(r);
   return clone(r);
 }
-export function mockReviewQueue(): TnReviewTask[] { tnMaybeFail(); return clone(tnState.tasks); }
+export function mockReviewQueue(): TnReviewTask[] {
+  tnMaybeFail();
+  const demo = mockMode() === 'noreview';
+  return clone(tnState.tasks.filter((t) => !demo || t.bid.startsWith('fx_') || t.bid === SBX).map((t) => ({ ...t, demo })));
+}
 export function mockReviewTask(tid: string): TnReviewTaskDetail {
   const t = tnState.tasks.find((x) => x.tid === tid); if (!t) throw tnErr(404, 'not_found', 'No review task');
   const isL = t.bid === 'fx_lakshmi';
@@ -886,7 +920,8 @@ export function mockReviewTask(tid: string): TnReviewTaskDetail {
 }
 export function mockReviewDecision(tid: string, d: { action: string; scope: string; reason: string }): TnReviewTask {
   const t = tnState.tasks.find((x) => x.tid === tid); if (!t) throw tnErr(404, 'not_found', 'No review task');
-  t.decisions.push({ ...d, reviewer_hash: 'rv_you', at: new Date().toISOString() });
+  const demo = mockMode() === 'noreview';
+  t.decisions.push({ ...d, reviewer_hash: 'rv_you', at: new Date().toISOString(), ...(demo ? { demo: true, label: 'Demo reviewer action' } : {}) });
   t.status = d.action === 'approve_identity' || d.action === 'approve_claim' ? 'approved' : d.action === 'reject_claim' ? 'rejected' : d.action === 'escalate' ? 'escalated' : 'needs_evidence';
   if (d.action === 'approve_identity' && t.bid === 'fx_lakshmi') {
     const id = (tnState.checks.fx_lakshmi || []).find((c) => c.dim === 'identity');
@@ -960,7 +995,7 @@ const dscCards: TnDiscoverCard[] = [
   dCard({ bid: 'fx_bengaluru', display_name: 'Bengaluru Home Care Supplies', city: 'Bengaluru', district: 'BENGALURU URBAN', state: 'KARNATAKA', categories: ['cleaning'],
     service_area: { kind: 'state', districts: [], states: ['KARNATAKA'] }, last_checked_at: tnAgo(60 * 30) }),
   dCard({ bid: 'fx_unverified', display_name: 'Charminar Snacks Depot', categories: ['snacks'], service_area: { kind: 'district', districts: ['HYDERABAD'], states: ['TELANGANA'] },
-    trust: { category: 'additional_review_required', category_text: 'Additional review required (simulated demo data)', dims: simDims({ identity: ['partially_verified', 'simulated_fixture'] }) } }),
+    trust: { category: 'additional_review_required', category_text: 'Partially verified (simulated demo data)', dims: simDims({ identity: ['partially_verified', 'simulated_fixture'] }) } }),
 ];
 const VERIFIED = new Set(['identity_confirmed', 'evidence_reviewed', 'ready_for_counterparty_review']);
 const CAT_RANK: Record<string, number> = { ready_for_counterparty_review: 3, evidence_reviewed: 2, identity_confirmed: 1 };
@@ -975,9 +1010,9 @@ export function mockTnAreas(): TnAreas { return clone(DSC_AREAS); }
 export function mockTnDiscover(q: TnDiscoverQuery): TnDiscoverResponse {
   tnMaybeFail();
   const mode = mockMode();
-  if (mode === 'nobuyer' || mode === 'new' || mode === 'seller') throw tnErr(403, 'buyer_profile_required', 'Verify a buyer business first to find suppliers.');
-  const district = q.district || DSC_VIEWER.district; const state = q.state || DSC_VIEWER.state;
-  const scope = q.scope || 'district';
+  const noBuyer = (mode === 'nobuyer' || mode === 'new' || mode === 'seller') && !tnState.businesses[SBX];
+  const district = q.district || (noBuyer ? '' : DSC_VIEWER.district); const state = q.state || (noBuyer ? '' : DSC_VIEWER.state);
+  const scope = noBuyer && (q.scope || 'district') === 'district' && !q.district ? 'india' : (q.scope || 'district');
   let rows = mode === 'none' ? [] : dscCards.slice();
   rows = rows.filter((c) => scope === 'india' || (scope === 'state' ? coversState(c, state) : covers(c, district, state)));
   if (q.verified_only !== false) rows = rows.filter((c) => VERIFIED.has(c.trust.category));
@@ -986,11 +1021,13 @@ export function mockTnDiscover(q: TnDiscoverQuery): TnDiscoverResponse {
   rows = rows.map((c) => ({ ...c, delivers_to_viewer: covers(c, DSC_VIEWER.district, DSC_VIEWER.state) }));
   rows.sort((a, b) => Number(!!b.delivers_to_viewer) - Number(!!a.delivers_to_viewer) || (CAT_RANK[b.trust.category] || 0) - (CAT_RANK[a.trust.category] || 0)
     || String(b.last_checked_at).localeCompare(String(a.last_checked_at)) || a.display_name.localeCompare(b.display_name));
-  return { viewer: DSC_VIEWER, scope, area: { district, state }, verified_only: q.verified_only !== false, results: clone(rows), next_cursor: null, sort_note: DSC_SORT, total: rows.length };
+  if (noBuyer) rows = rows.map((c) => ({ ...c, connection: 'none' as const, rid: null }));
+  return { viewer: noBuyer ? null : DSC_VIEWER, viewer_needs_profile: noBuyer, scope, area: { district, state }, verified_only: q.verified_only !== false, results: clone(rows), next_cursor: null, sort_note: DSC_SORT, total: rows.length };
 }
 
 export function mockTnConnect(body: { from_bid: string; to_bid: string; categories: string[]; message?: string }): TnConnectResponse {
   tnMaybeFail();
+  if (!body.from_bid) throw tnErr(403, 'buyer_profile_required', 'To request a connection, create your business profile or try a sample shop first.', { options: ['create_profile', 'sample_shop'] });
   const c = dscCards.find((x) => x.bid === body.to_bid);
   if (!c) throw tnErr(404, 'not_found', 'Supplier not found');
   const rid = c.rid || `rel_dsc_${c.bid}`;

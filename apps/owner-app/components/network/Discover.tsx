@@ -6,8 +6,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { relTime, rupees } from '@/lib/format';
 import {
-  CONNECTION_WORD, LISTING_CATEGORIES, SORT_NOTE, categoryWord, dimWord, errorDetail, myBusinesses, pickBusiness, statusWord, titleCase, tnConnect, tnDiscover,
+  CONNECTION_WORD, LISTING_CATEGORIES, SORT_NOTE, absoluteUrl, categoryWord, dimWord, errorDetail, myBusinesses, pickBusiness, statusWord, titleCase, tnAreas, tnConnect, tnDiscover,
 } from '@/lib/network';
+import type { TnAreas } from '@/lib/types';
+import { ProfileChooser, SampleShopLink, WhatsAppShare } from './SampleShop';
 import type { TnBusinessMine, TnDiscoverCard, TnDiscoverResponse, TnDiscoverScope } from '@/lib/types';
 import { Button, ButtonLink, Callout, EmptyState, ErrorState, Icon, Skeleton, StatusPill } from '../ui';
 import { SegmentedControl, Sheet } from '../ui-client';
@@ -68,7 +70,7 @@ export function SupplierCard({ c, onConnect, preview }: { c: TnDiscoverCard; onC
 }
 
 // ---------------------------------------------------------------- request sheet
-function ConnectSheet({ card, fromBid, onClose, onSent }: { card: TnDiscoverCard | null; fromBid: string; onClose: () => void; onSent: (c: TnDiscoverCard, note: string) => void }) {
+function ConnectSheet({ card, fromBid, onClose, onSent, onNeedProfile }: { card: TnDiscoverCard | null; fromBid: string; onClose: () => void; onSent: (c: TnDiscoverCard, note: string) => void; onNeedProfile: () => void }) {
   const [cats, setCats] = useState<string[]>([]);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -85,6 +87,7 @@ function ConnectSheet({ card, fromBid, onClose, onSent }: { card: TnDiscoverCard
         r.duplicate ? 'You had already sent a request to this supplier.' : r.guard?.blocked ? 'Request sent. Your message was held back by the safety check, so the supplier sees only your categories.' : 'Request sent. The supplier will see your redacted profile and decide.');
     } catch (e) {
       const d = errorDetail(e);
+      if (d.code === 'buyer_profile_required') { onNeedProfile(); return; }
       setErr(d.code === 'rate_limited' ? 'You have sent the maximum number of requests for today. Try again tomorrow.'
         : d.code === 'buyer_profile_required' ? 'Verify your buyer business first.'
           : e instanceof Error ? e.message : String(e));
@@ -134,34 +137,50 @@ export function Discover() {
   const [needsBuyer, setNeedsBuyer] = useState(false);
   const [sheet, setSheet] = useState<TnDiscoverCard | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [sent, setSent] = useState<TnDiscoverCard | null>(null);
+  const [chooser, setChooser] = useState<TnDiscoverCard | null>(null);
+  const [areas, setAreas] = useState<TnAreas | null>(null);
+  const [pickState, setPickState] = useState('');
+  const [pickDistrict, setPickDistrict] = useState('');
   const seq = useRef(0);
 
-  const loadBiz = useCallback(() => {
-    setBizErr(null); setBiz(undefined);
-    myBusinesses().then((mine) => {
+  const loadBiz = useCallback((prefer?: string) => {
+    setBizErr(null);
+    return myBusinesses().then((mine) => {
       const buyers = mine.filter((b) => b.roles.includes('buyer'));
-      setBiz(pickBusiness(buyers));
-      if (!buyers.length) { setNeedsBuyer(true); setLoading(false); }
-    }).catch((e) => { setBizErr(e); setLoading(false); });
+      const b = (prefer && buyers.find((x) => x.bid === prefer)) || pickBusiness(buyers);
+      setBiz(b);
+      setNeedsBuyer(!b);
+      if (!b) setScope((x) => (x === 'district' ? 'india' : x));
+      return b;
+    }).catch((e) => { setBizErr(e); setLoading(false); return null; });
   }, []);
   useEffect(() => { loadBiz(); }, [loadBiz]);
   useEffect(() => { const t = setTimeout(() => setQd(q.trim()), 300); return () => clearTimeout(t); }, [q]);
 
   const load = useCallback(async (cursor?: string | null) => {
-    if (!biz) return;
+    if (biz === undefined) return;
     const my = ++seq.current;
     if (cursor) setMore(true); else { setLoading(true); setError(null); }
+    const area = !biz && pickDistrict ? { scope: 'district' as const, district: pickDistrict, state: pickState }
+      : !biz && pickState && scope !== 'india' ? { scope: 'state' as const, state: pickState } : { scope };
     try {
-      const r = await tnDiscover({ bid: biz.bid, q: qd || undefined, category: category || undefined, scope, verified_only: verifiedOnly, limit: PAGE, cursor: cursor || undefined });
+      const r = await tnDiscover({ ...(biz ? { bid: biz.bid } : {}), q: qd || undefined, category: category || undefined, ...area, verified_only: verifiedOnly, limit: PAGE, cursor: cursor || undefined });
       if (my !== seq.current) return;
-      setData(r); setRows((x) => (cursor ? [...x, ...r.results] : r.results)); setNeedsBuyer(false);
+      setData(r); setRows((x) => (cursor ? [...x, ...r.results] : r.results)); setNeedsBuyer(!!r.viewer_needs_profile);
     } catch (e) {
       if (my !== seq.current) return;
       if (e instanceof ApiError && (errorDetail(e).code === 'buyer_profile_required')) setNeedsBuyer(true);
       else setError(e);
     } finally { if (my === seq.current) { setLoading(false); setMore(false); } }
-  }, [biz, qd, category, scope, verifiedOnly]);
-  useEffect(() => { if (biz) load(); }, [biz, load]);
+  }, [biz, qd, category, scope, verifiedOnly, pickState, pickDistrict]);
+  useEffect(() => { if (biz !== undefined) load(); }, [biz, load]);
+  useEffect(() => { if (needsBuyer && !areas) tnAreas().then(setAreas).catch(() => {}); }, [needsBuyer, areas]);
+  const districts = areas?.states.find((x) => x.state === pickState)?.districts || [];
+  function connect(c: TnDiscoverCard) {
+    setNote(null); setSent(null);
+    if (!biz) setChooser(c); else setSheet(c);
+  }
 
   const district = titleCase(data?.viewer?.district || data?.area?.district) || 'your district';
   const state = titleCase(data?.viewer?.state || data?.area?.state) || 'Your state';
@@ -175,15 +194,16 @@ export function Discover() {
         <p>Suppliers who listed themselves on Sauda and deliver to your area. Each card shows what was checked and where the result came from.</p>
       </div>
 
-      {needsBuyer ? (
-        <EmptyState icon="shield" title="Verify your business first"
-          action={<ButtonLink href="/network/onboard?role=buyer">Verify my business first</ButtonLink>}>
-          Suppliers see a redacted profile of the buyer who asks to connect, so you need a verified buyer business before you can search.
-        </EmptyState>
-      ) : bizErr ? (
-        <ErrorState error={bizErr} onRetry={loadBiz} title="Could not load your business" />
+      {bizErr ? (
+        <ErrorState error={bizErr} onRetry={() => loadBiz()} title="Could not load your business" />
       ) : (
         <>
+          {needsBuyer && (
+            <Callout tone="info" title="Browsing without a business profile">
+              You can look at every listed supplier. To request a connection, create your business profile or try a sample shop; Request to connect walks you through it.
+            </Callout>
+          )}
+          {biz?.sandbox && <Callout tone="neutral" icon="flask">You are browsing as your sample shop, <b>{biz.display_name}</b>. Requests you send from it are demo requests to demo suppliers.</Callout>}
           <div className="dsc-controls" role="search" aria-label="Find suppliers">
             <label className="dsc-search">
               <span className="sr-only">Search suppliers</span>
@@ -195,8 +215,25 @@ export function Discover() {
               {LISTING_CATEGORIES.map((t) => <button key={t} type="button" className="chip-btn" aria-pressed={category === t} onClick={() => setCategory(category === t ? '' : t)}>{t}</button>)}
             </div>
             <div className="dsc-row">
-              <SegmentedControl label="Delivery area" value={scope} onChange={setScope}
-                options={[{ value: 'district', label: `Near me · ${district}` }, { value: 'state', label: state }, { value: 'india', label: 'All India' }]} />
+              {needsBuyer ? (
+                <div className="row sm wrap">
+                  <label className="field" style={{ margin: 0 }}><span className="sr-only">State</span>
+                    <select className="input" value={pickState} onChange={(e) => { setPickState(e.target.value); setPickDistrict(''); setScope(e.target.value ? 'state' : 'india'); }} aria-label="State">
+                      <option value="">All India</option>
+                      {(areas?.states || []).map((x) => <option key={x.state} value={x.state}>{titleCase(x.state)}</option>)}
+                    </select>
+                  </label>
+                  {pickState && <label className="field" style={{ margin: 0 }}><span className="sr-only">District</span>
+                    <select className="input" value={pickDistrict} onChange={(e) => setPickDistrict(e.target.value)} aria-label="District">
+                      <option value="">Whole state</option>
+                      {districts.map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}
+                    </select>
+                  </label>}
+                </div>
+              ) : (
+                <SegmentedControl label="Delivery area" value={scope} onChange={setScope}
+                  options={[{ value: 'district', label: `Near me · ${district}` }, { value: 'state', label: state }, { value: 'india', label: 'All India' }]} />
+              )}
               <label className="switch">
                 <input type="checkbox" role="switch" checked={verifiedOnly} aria-checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} />
                 <span>Verified only</span>
@@ -205,7 +242,12 @@ export function Discover() {
             <p className="dsc-note"><Icon name="info" size={14} />{data?.sort_note || SORT_NOTE}.</p>
           </div>
 
-          {note && <Callout tone="ok">{note}</Callout>}
+          {note && <Callout tone="ok">{note}
+            {sent?.rid && biz && <span className="row sm wrap" style={{ marginTop: 8 }}>
+              <span className="small">Know someone at {sent.display_name}? Tell them on WhatsApp.</span>
+              <WhatsAppShare business={biz.display_name} link={absoluteUrl(`/network/relationships/${encodeURIComponent(sent.rid)}`)} />
+            </span>}
+          </Callout>}
 
           {loading && !rows.length ? (
             <div className="dsc-list" aria-busy="true" aria-label="Loading suppliers">
@@ -229,7 +271,7 @@ export function Discover() {
             <section aria-label={`Suppliers delivering to ${areaName}`} className="stack sm">
               <p className="small muted" aria-live="polite">{rows.length}{data?.total && data.total > rows.length ? ` of ${data.total}` : ''} supplier{rows.length === 1 ? '' : 's'}{verifiedOnly ? ', verified only' : ''}</p>
               <ul className="dsc-list">
-                {rows.map((c) => <li key={c.bid}><SupplierCard c={c} onConnect={(x) => { setNote(null); setSheet(x); }} /></li>)}
+                {rows.map((c) => <li key={c.bid}><SupplierCard c={c} onConnect={connect} /></li>)}
               </ul>
               {data?.next_cursor && <div><Button variant="secondary" size="sm" busy={more} busyLabel="Loading…" onClick={() => load(data.next_cursor)}>Show more</Button></div>}
               {rows.some((c) => c.is_fixture) && (
@@ -239,8 +281,11 @@ export function Discover() {
           )}
         </>
       )}
-      {biz && <ConnectSheet card={sheet} fromBid={biz.bid} onClose={() => setSheet(null)}
-        onSent={(c, t) => { setRows((x) => x.map((y) => (y.bid === c.bid ? c : y))); setSheet(null); setNote(t); }} />}
+      {!biz?.sandbox && !bizErr && <SampleShopLink onReady={async (bid) => { await loadBiz(bid); }} />}
+      {biz && <ConnectSheet card={sheet} fromBid={biz.bid} onClose={() => setSheet(null)} onNeedProfile={() => { setChooser(sheet); setSheet(null); }}
+        onSent={(c, t) => { setRows((x) => x.map((y) => (y.bid === c.bid ? c : y))); setSheet(null); setNote(t); setSent(c); }} />}
+      <ProfileChooser open={!!chooser} onClose={() => setChooser(null)}
+        onSample={async (bid) => { const c = chooser; const b = await loadBiz(bid); setChooser(null); if (b && c) setSheet(c); }} />
     </div>
   );
 }

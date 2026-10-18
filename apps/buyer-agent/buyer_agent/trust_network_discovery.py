@@ -49,7 +49,7 @@ CATEGORY_TEXT = {
     Category.identity_confirmed: "Identity confirmed",
     Category.evidence_reviewed: "Identity confirmed and evidence reviewed",
     Category.ready_for_counterparty_review: "Verified and ready for you to review",
-    Category.additional_review_required: "Verification in progress",
+    Category.additional_review_required: "Partially verified",
     Category.verification_unsuccessful: "Verification unsuccessful",
 }
 
@@ -314,7 +314,8 @@ def _buyer_business(v: Viewer, bid: str | None) -> dict | None:
 
 
 def _buyer_required() -> object:
-    return _err(403, "buyer_profile_required", "Set up and verify your shop's business profile to find suppliers.")
+    return _err(403, "buyer_profile_required", "To request a connection, create your business profile or try a sample shop first. "
+                "You can keep browsing suppliers without one.", options=["create_profile", "sample_shop"])
 
 
 def listed_sellers() -> list[dict]:
@@ -347,10 +348,14 @@ def discover(bid: str | None = Query(None), q: str | None = Query(None, max_leng
     if _limited(f"discover:{v.uid}", DISCOVER_PER_MIN, 60):
         return _err(429, "rate_limited", f"Up to {DISCOVER_PER_MIN} searches a minute. Try again shortly.")
     buyer = _buyer_business(v, bid)
-    if not buyer:
-        return _buyer_required()
-    addr = buyer.get("address") or {}
-    my_d, my_s = area_of_pin(str(addr.get("pin") or ""), addr.get("city") or "", addr.get("line") or "")
+    if buyer:
+        addr = buyer.get("address") or {}
+        my_d, my_s = area_of_pin(str(addr.get("pin") or ""), addr.get("city") or "", addr.get("line") or "")
+    else:
+        # Read-only browsing without a business: the area is what the viewer picked, or all of India.
+        addr, my_d, my_s = {}, None, None
+        if scope == "district" and not district:
+            scope = "state" if state else "india"
     st = canon_state(state) if state else my_s
     if state and not st:
         return _err(422, "invalid_area", "That state is not in the India PIN directory.", invalid=[state])
@@ -358,15 +363,16 @@ def discover(bid: str | None = Query(None), q: str | None = Query(None, max_leng
     if district and not di:
         return _err(422, "invalid_area", "That district is not in the India PIN directory.", invalid=[district])
     rels = {}
-    for r in tn.relationships_of(buyer["bid"]):
+    for r in (tn.relationships_of(buyer["bid"]) if buyer else []):
         if r.get("buyer_bid") == buyer["bid"]:
             rels[r["seller_bid"]] = r
     ql = (q or "").strip().lower()
     cat_f = (category or "").strip().lower()
     rows = []
+    mine = {b["bid"] for b in tn.businesses_of(v.uid)}
     for s in listed_sellers():
-        if s["bid"] == buyer["bid"]:
-            continue
+        if s["bid"] in mine or s.get("sandbox"):
+            continue  # never your own business; sample shops are never shown in anyone's Find suppliers
         lst = s["listing"]
         area = lst.get("service_area") or {}
         if scope == "district" and not covers_district(area, di, st):
@@ -390,8 +396,14 @@ def discover(bid: str | None = Query(None), q: str | None = Query(None, max_leng
     off = _decode_cursor(cursor)
     page = rows[off:off + limit]
     nxt = _encode_cursor(off + limit) if off + limit < len(rows) else None
+    if not buyer:
+        return {"viewer": None, "viewer_needs_profile": True,
+                "viewer_note": "You are browsing without a business profile. Create one, or try a sample shop, to request a connection.",
+                "scope": scope, "area": {"district": title(di), "state": title(st)}, "verified_only": verified_only,
+                "results": page, "next_cursor": nxt, "total": len(rows), "sort_note": SORT_NOTE}
     return {"viewer": {"bid": buyer["bid"], "display_name": buyer.get("display_name"), "district": title(my_d), "state": title(my_s),
-                       "pin": addr.get("pin")},
+                       "pin": addr.get("pin"), "sandbox": bool(buyer.get("sandbox"))},
+            "viewer_needs_profile": False,
             "scope": scope, "area": {"district": title(di), "state": title(st)}, "verified_only": verified_only,
             "results": page, "next_cursor": nxt, "total": len(rows), "sort_note": SORT_NOTE}
 
@@ -412,7 +424,8 @@ def connect(body: ConnectIn, v: Viewer = Depends(viewer)):
     if body.to_bid == buyer["bid"]:
         return _err(409, "self_connect", "A business cannot connect to itself.")
     seller = tn.business(body.to_bid)
-    if not seller or not (seller.get("listing") or {}).get("listed") or "seller" not in (seller.get("roles") or []):
+    if (not seller or not (seller.get("listing") or {}).get("listed") or "seller" not in (seller.get("roles") or [])
+            or seller.get("sandbox")):
         return _err(404, "not_found", "supplier not found")
     rid = f"rel_{tn.stable_hash([buyer['bid'], seller['bid']])[:16]}"
     existing = tn.get(tn.RELATIONSHIPS, rid)

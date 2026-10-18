@@ -12,7 +12,7 @@ export default function NotFound() {
         <h1 id="nf-h" className="display">This page doesn’t exist</h1>
         <p className="muted">The link may be old or mistyped. Nothing was ordered or changed by opening it.</p>
         <div className="nf-actions">
-          <ButtonLink href="/" icon="home">Go to home</ButtonLink>
+          <ButtonLink href="/dashboard" icon="home">Go to your dashboard</ButtonLink>
           <ButtonLink href="/restock" variant="secondary" icon="cart">Your restocks</ButtonLink>
         </div>
         <Link className="nf-link" href="/trust/latest">See the signed record<Icon name="arrow" size={14} /></Link>

@@ -8,6 +8,7 @@ import { useAsync } from '@/lib/useAsync';
 import type { TnBusinessMine, TnRole } from '@/lib/types';
 import { Button, ButtonLink, Callout, EmptyState, ErrorState, Icon, SectionHead, Skeleton, StatusPill } from '../ui';
 import { NIcon } from './shared';
+import { SampleShopButton, WhatsAppShare } from './SampleShop';
 
 type Line = { key: number; name: string; category: string; contact: string };
 type Sent = { name: string; contact_masked: string; link: string; error?: string; duplicate?: boolean };
@@ -26,8 +27,11 @@ export function InviteView() {
   if (!biz) {
     return (
       <div className="narrow">
-        <EmptyState icon="shield" title="Verify your business first" action={<ButtonLink href={`/network/onboard?role=${role === 'seller' ? 'buyer' : 'seller'}`}>Verify my business</ButtonLink>}>
-          Invitations come from a business. Set yours up, then invite the {role === 'seller' ? 'suppliers' : 'buyers'} you trade with.
+        <EmptyState icon="shield" title="Invitations come from a business" action={<div className="stack sm" style={{ width: '100%', maxWidth: 320 }}>
+          <ButtonLink href={`/network/onboard?role=${role === 'seller' ? 'buyer' : 'seller'}`} block>Create your business profile</ButtonLink>
+          <SampleShopButton block onReady={() => mine.reload()} />
+        </div>}>
+          Set up your business (it does not need to be fully verified), or try with a sample shop, then invite the {role === 'seller' ? 'suppliers' : 'buyers'} you trade with.
         </EmptyState>
       </div>
     );
@@ -88,7 +92,7 @@ function Form({ biz, role }: { biz: TnBusinessMine; role: TnRole }) {
       {sent && (
         <section className="share" aria-live="polite" aria-labelledby="links-h">
           <h2 id="links-h">Share these links yourself</h2>
-          <p className="small">Sauda does not send messages. Copy each link and send it on WhatsApp, SMS or email. <b>Each link is shown only once</b>; if you lose it, send a new invitation.</p>
+          <p className="small">Sauda does not send messages. Copy each link, or tap Share on WhatsApp to open WhatsApp with the message ready (only your business name and the link are included). <b>Each link is shown only once</b>; if you lose it, send a new invitation.</p>
           {sent.map((s, i) => (
             <div key={i} className="stack xs">
               <span className="strong break">{s.name}{s.contact_masked ? <span className="muted small"> · {s.contact_masked}</span> : null}</span>
@@ -96,6 +100,7 @@ function Form({ biz, role }: { biz: TnBusinessMine; role: TnRole }) {
                 <div className="row sm wrap">
                   <code className="grow">{s.link}</code>
                   <Button size="sm" variant="secondary" onClick={() => copy(i, s.link)} aria-label={`Copy link for ${s.name}`}><NIcon name="copy" size={14} />{copied === i ? 'Copied' : 'Copy'}</Button>
+                  <WhatsAppShare business={biz.display_name} link={s.link} />
                 </div>
               )}
             </div>

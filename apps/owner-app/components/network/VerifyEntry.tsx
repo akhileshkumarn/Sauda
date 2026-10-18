@@ -9,7 +9,7 @@ export function VerifyEntry() {
   const q = useAsync(() => myBusinesses(), []);
   if (!q.data) return null;
   const b = pickBusiness(q.data);
-  const w = b ? categoryWord(b.summary?.category, b.roles) : null;
+  const w = b ? categoryWord(b.summary?.category, b.roles, b.sandbox) : null;
   return (
     <section>
       <SectionHead title="Network" href="/network" linkText="Open" />

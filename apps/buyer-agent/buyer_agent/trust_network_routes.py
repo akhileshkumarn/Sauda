@@ -1345,23 +1345,56 @@ def relationship_decision(rid: str, body: RelDecisionIn, v: Viewer = Depends(vie
 OPEN_REVIEW = ("open", "needs_evidence", "escalated", "in_review")
 
 
+DEMO_REVIEWER_LABEL = "Demo reviewer action"
+DEMO_NOTE = ("Demo mode: you can review only simulated demo businesses and your own sample shop. "
+             "Real businesses are reviewed only by Sauda reviewers.")
+
+
+def _demo_visible(b: dict | None, v: Viewer) -> bool:
+    """What a non-reviewer may see and act on in the review console: shared demo fixtures and their own sample shop.
+    Never a real business, and never another user's sample shop."""
+    if not b or b.get("is_fixture") is not True:
+        return False
+    if b.get("sandbox"):
+        return v.uid in (b.get("members") or [])
+    return str(b.get("bid") or "").startswith("fx_")
+
+
+def _review_access(t: dict, v: Viewer) -> tuple[dict, bool]:
+    """-> (business, demo). Real reviewers see everything; anyone else only demo data, else 403."""
+    b = tn.business(t["bid"]) or {}
+    if v.is_reviewer:
+        return b, False
+    if not _demo_visible(b, v):
+        raise HTTPException(403, "Demo reviewers can act only on simulated demo businesses and their own sample shop.")
+    return b, True
+
+
+@router.get("/review/me")
+def review_me(v: Viewer = Depends(viewer)):
+    return {"reviewer": v.is_reviewer, "demo": not v.is_reviewer, "note": None if v.is_reviewer else DEMO_NOTE}
+
+
 @router.get("/review/queue")
-def review_queue(status: str | None = Query(None), v: Viewer = Depends(reviewer)):
+def review_queue(status: str | None = Query(None), v: Viewer = Depends(viewer)):
     rows = [t for t in tn.all_docs(tn.REVIEWS) if (t["status"] == status if status else t["status"] in OPEN_REVIEW)]
     out = []
     for t in sorted(rows, key=lambda t: t.get("created_at") or ""):
         b = tn.business(t["bid"]) or {}
+        if not v.is_reviewer and not _demo_visible(b, v):
+            continue
         out.append({**t, "display_name": b.get("display_name"), "is_fixture": bool(b.get("is_fixture")),
+                    "sandbox": bool(b.get("sandbox")), "demo": not v.is_reviewer,
                     "reason_text": policy.reason_text(t.get("reasons", []))})
     return out
 
 
 @router.get("/review/tasks/{tid}")
-def review_task(tid: str, v: Viewer = Depends(reviewer)):
+def review_task(tid: str, v: Viewer = Depends(viewer)):
     t = tn.get(tn.REVIEWS, tid)
     if not t:
         raise HTTPException(404, "task not found")
-    b = tn.business(t["bid"]) or {}
+    b, demo = _review_access(t, v)
     checks = tn.checks_of(t["bid"])
     manual = [c for c in checks if c.get("source_kind") == "human_review" and c.get("status") == "pending"]
     summ = summary_of(b) if b else None
@@ -1381,7 +1414,8 @@ def review_task(tid: str, v: Viewer = Depends(reviewer)):
                               for c in manual],
             "business": _public_business(b) if b else None, "summary": summ,
             "checks": checks, "evidence": [_public_evidence(e) for e in tn.evidence_of(t["bid"])],
-            "relationships": tn.relationships_of(t["bid"])}
+            "relationships": [r for r in tn.relationships_of(t["bid"]) if not demo or r.get("is_fixture") is True],
+            "demo": demo, "demo_note": DEMO_NOTE if demo else None}
 
 
 class ReviewDecisionIn(BaseModel):
@@ -1391,16 +1425,19 @@ class ReviewDecisionIn(BaseModel):
 
 
 @router.post("/review/tasks/{tid}/decision")
-def review_decision(tid: str, body: ReviewDecisionIn, v: Viewer = Depends(reviewer)):
+def review_decision(tid: str, body: ReviewDecisionIn, v: Viewer = Depends(viewer)):
     t = tn.get(tn.REVIEWS, tid)
     if not t:
         raise HTTPException(404, "task not found")
+    _, demo = _review_access(t, v)
     if not body.reason.strip():
         raise HTTPException(422, "a reason is required")
     bid = t["bid"]
     b = _biz_or_404(bid)
     rh = uid_hash(v.uid)
     at = tn.iso()
+    if demo:
+        return _demo_decision(t, b, body, v, rh, at)
     stamp = {"uid_hash": rh, "decision": body.action, "reason": body.reason.strip(), "at": at}
     case_id = t.get("case_id") or f"case_review_{bid}"
     new_checks: list[dict] = []
@@ -1461,6 +1498,61 @@ def review_decision(tid: str, body: ReviewDecisionIn, v: Viewer = Depends(review
                                                          "category": s.category.value,
                                                          "checks": [c["check_id"] for c in new_checks]})
     return {"task": saved, "summary": summary_of(b), "checks": new_checks}
+
+
+def _demo_decision(t: dict, b: dict, body: ReviewDecisionIn, v: Viewer, rh: str, at: str) -> dict:
+    """A non-reviewer's decision on demo data. Recorded on the task and in the ledger, labelled "Demo reviewer action".
+    On the user's own sample shop it takes effect like a review (with a demo-labelled check); on the shared demo
+    fixtures it is recorded only, so the shared tasks stay open for every visitor."""
+    bid = t["bid"]
+    own = bool(b.get("sandbox")) and v.uid in (b.get("members") or [])
+    if body.scope.startswith("relationship:"):
+        r = tn.get(tn.RELATIONSHIPS, body.scope.split(":", 1)[1])
+        if not r or bid not in (r["buyer_bid"], r["seller_bid"]) or r.get("is_fixture") is not True:
+            raise HTTPException(403, "Demo reviewers can act only on simulated demo relationships.")
+    if body.action == "approve_identity" and body.scope != "identity":
+        raise HTTPException(422, "approve_identity takes scope 'identity'")
+    claim = None
+    if body.scope.startswith("claim:"):
+        claim = tn.get(tn.CHECKS, body.scope.split(":", 1)[1])
+        if not claim or claim.get("business_id") != bid:
+            raise HTTPException(404, "check not found for this business")
+    decision = {"action": body.action, "scope": body.scope, "reason": body.reason.strip(), "reviewer_hash": rh, "at": at,
+                "demo": True, "label": DEMO_REVIEWER_LABEL}
+    new_checks: list[dict] = []
+    if own and body.action in ("approve_identity", "approve_claim", "reject_claim") and not body.scope.startswith("relationship:"):
+        ok = body.action != "reject_claim"
+        dim = Dim.identity.value if body.action == "approve_identity" else claim["dim"]
+        c = _check_doc(bid, t.get("case_id") or f"case_review_{bid}", dim=dim, check_type="demo_reviewer_" + (
+            "identity" if body.action == "approve_identity" else claim["check_type"]), source_kind=SourceKind.simulated_fixture,
+            source_name="Demo reviewer (sample shop, not a Sauda reviewer)",
+            status=CheckStatus.verified if ok else CheckStatus.failed,
+            summary=f"{DEMO_REVIEWER_LABEL}: {'confirmed' if ok else 'rejected'} on a sample shop. {body.reason.strip()}"
+                    " (simulated demo data, not a real verification)")
+        c["is_fixture"] = True
+        c["sandbox"] = True
+        tn.put(tn.CHECKS, c["check_id"], c)
+        new_checks.append(c)
+
+    def apply(d):
+        d["decisions"] = [*d.get("decisions", []), decision]
+        if own:
+            if body.action == "request_evidence":
+                d["status"] = "needs_evidence"
+            elif body.action == "escalate":
+                d["status"] = "escalated"
+            elif body.action == "reject_claim":
+                d["status"] = "rejected"
+            else:
+                d["status"] = "approved"
+        return d
+    saved = tn.mutate(tn.REVIEWS, t["tid"], apply)
+    ledger(bid, "tn.review.demo_decision", f"demo-reviewer:{rh}", {"tid": t["tid"], **decision, "status": saved["status"],
+                                                                   "checks": [c["check_id"] for c in new_checks]})
+    note = ("Recorded on your sample shop." if own else
+            "Recorded as a demo action. Shared demo businesses stay open so every visitor can try the review.")
+    return {"task": saved, "summary": summary_of(tn.business(bid) or b), "checks": new_checks, "demo": True,
+            "label": DEMO_REVIEWER_LABEL, "note": note}
 
 
 # ---------------------------------------------------------------- fixtures
@@ -1660,3 +1752,4 @@ def seed(reset: bool = False) -> dict:
 
 
 from . import trust_network_discovery  # noqa: E402,F401  (registers /tn/discover, /tn/connect, listing routes on this router)
+from . import trust_network_sandbox  # noqa: E402,F401  (registers /tn/sandbox routes on this router)

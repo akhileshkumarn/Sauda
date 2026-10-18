@@ -62,14 +62,18 @@ def test_pagination_cursor(dz):
     assert not {c["bid"] for c in a["results"]} & {c["bid"] for c in b["results"]}
 
 
-def test_buyer_profile_required(dz):
+def test_browse_without_profile_and_connect_needs_one(dz):
     r = dz.client.get("/tn/discover", headers=auth("nobody"))
-    assert r.status_code == 403 and r.json()["code"] == "buyer_profile_required"
+    assert r.status_code == 200 and r.json()["viewer_needs_profile"] is True and r.json()["viewer"] is None
+    assert r.json()["scope"] == "india" and len(r.json()["results"]) == 5
+    assert all(c["connection"] == "none" for c in r.json()["results"])
+    hy = names(dz.client.get("/tn/discover?district=Hyderabad&state=Telangana", headers=auth("nobody")))
+    assert set(hy) == {"Annapurna Rice Traders", "Deccan Edible Oils", "Metro Distributors"}
     mk(dz, "sam", name="Sam Wholesale", roles=("seller",), gstin=None)
     r = dz.client.get("/tn/discover", headers=auth("sam"))
-    assert r.status_code == 403 and r.json()["code"] == "buyer_profile_required"
-    assert dz.client.post("/tn/connect", json={"from_bid": "x", "to_bid": "fx_seller_annapurna"},
-                          headers=auth("nobody")).json()["code"] == "buyer_profile_required"
+    assert r.status_code == 200 and r.json()["viewer_needs_profile"] is True
+    r = dz.client.post("/tn/connect", json={"from_bid": "x", "to_bid": "fx_seller_annapurna"}, headers=auth("nobody"))
+    assert r.json()["code"] == "buyer_profile_required" and r.json()["options"] == ["create_profile", "sample_shop"]
 
 
 def _real_seller(dz, uid="sam", name="Sam Wholesale", gstin="36AAAAA0000A1Z5"):

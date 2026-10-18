@@ -430,6 +430,9 @@ export interface TnBusiness {
   owner_uid?: string;
   members?: string[];
   is_fixture?: boolean;
+  /** A personal sample shop ("Try with a sample shop"): simulated data, visible only to its owner. */
+  sandbox?: boolean;
+  fixture_label?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   version: number;
@@ -539,7 +542,7 @@ export interface TnInvitationPublic { from_display_name: string; role_invited: T
 
 export type TnReviewStatus = 'open' | 'needs_evidence' | 'approved' | 'rejected' | 'escalated';
 export type TnReviewAction = 'approve_identity' | 'approve_claim' | 'reject_claim' | 'request_evidence' | 'escalate';
-export interface TnReviewDecision { action: TnReviewAction | string; scope: string; reason: string; reviewer_hash?: string; at: string }
+export interface TnReviewDecision { action: TnReviewAction | string; scope: string; reason: string; reviewer_hash?: string; at: string; demo?: boolean; label?: string }
 export interface TnReviewTask {
   tid: string;
   bid: string;
@@ -552,6 +555,8 @@ export interface TnReviewTask {
   display_name?: string | null;
   roles?: TnRole[];
   is_fixture?: boolean;
+  sandbox?: boolean;
+  demo?: boolean;
 }
 export interface TnReviewTaskDetail {
   task: TnReviewTask;
@@ -599,7 +604,10 @@ export interface TnDiscoverCard {
 export type TnDiscoverScope = 'district' | 'state' | 'india';
 export interface TnDiscoverQuery { bid?: string; q?: string; category?: string; scope?: TnDiscoverScope; district?: string; state?: string; verified_only?: boolean; limit?: number; cursor?: string | null }
 export interface TnDiscoverResponse {
-  viewer: { bid: string; display_name?: string; district?: string | null; state?: string | null; pin?: string | null };
+  viewer: { bid: string; display_name?: string; district?: string | null; state?: string | null; pin?: string | null; sandbox?: boolean } | null;
+  /** True when the viewer has no buying business: the results are read-only browsing. */
+  viewer_needs_profile?: boolean;
+  viewer_note?: string;
   scope: TnDiscoverScope;
   area: { district?: string | null; state?: string | null };
   verified_only: boolean;

@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { ist } from '@/lib/format';
-import { ageText, dimWord, outstandingWord, reviewDecision, reviewQueue, reviewTask } from '@/lib/network';
+import { DEMO_REVIEW_NOTE, ageText, dimWord, outstandingWord, reviewDecision, reviewQueue, reviewTask, useReviewerMode } from '@/lib/network';
+import { SampleShopButton } from './SampleShop';
 import { useAsync } from '@/lib/useAsync';
 import type { TnCheck, TnReviewAction, TnReviewTaskDetail } from '@/lib/types';
 import { Button, Callout, EmptyState, ErrorState, Icon, SectionHead, Skeleton, StatusPill, type Tone } from '../ui';
@@ -17,17 +18,22 @@ const taskWord = (s: string) => TASK_TONE[s] || { label: s, tone: 'neutral' as T
 
 export function ReviewQueue() {
   const q = useAsync(() => reviewQueue(), []);
+  const rv = useReviewerMode();
+  const demo = !rv.reviewer;
   const forbidden = q.error instanceof ApiError && (q.error.status === 401 || q.error.status === 403);
   const rows = q.data || [];
   const open = rows.filter((t) => ['open', 'escalated', 'needs_evidence', 'in_review'].includes(t.status));
   const done = rows.filter((t) => !open.includes(t));
   return (
     <div className="narrow">
-      <div className="page-head"><h1>Review</h1><p>Businesses the checks could not settle on their own. Every decision needs a reason and is written to the signed record.</p></div>
+      <div className="page-head"><h1>Review{demo ? <> <span className="tag">Demo</span></> : null}</h1><p>Businesses the checks could not settle on their own. Every decision needs a reason and is written to the signed record.</p></div>
+      {demo && <Callout tone="neutral" icon="flask" title="Demo review console">{DEMO_REVIEW_NOTE} Your decisions are recorded and labelled Demo reviewer action. On shared demo businesses they are recorded only, so the task stays open for the next visitor; on your own sample shop they take effect.</Callout>}
       {q.loading && !q.data && <Skeleton lines={6} />}
       {forbidden && <EmptyState icon="lock" title="Reviewers only">This console is for Sauda reviewers. Your account is not on the reviewer list.</EmptyState>}
       {q.error && !q.data && !forbidden ? <ErrorState error={q.error} onRetry={q.reload} title="Could not load the review queue" /> : null}
-      {q.data && rows.length === 0 && <EmptyState icon="check" title="Nothing to review">New tasks appear when a check conflicts, a document needs reading, or an owner asks for a manual review.</EmptyState>}
+      {q.data && rows.length === 0 && (demo
+        ? <EmptyState icon="check" title="No demo tasks right now" action={<SampleShopButton />}>Start a sample shop to get your own review task to try.</EmptyState>
+        : <EmptyState icon="check" title="Nothing to review">New tasks appear when a check conflicts, a document needs reading, or an owner asks for a manual review.</EmptyState>)}
       {[{ t: `Waiting · ${open.length}`, r: open }, { t: `Decided · ${done.length}`, r: done }].map((g) => g.r.length > 0 && (
         <section key={g.t}>
           <SectionHead title={g.t} />
@@ -41,7 +47,7 @@ export function ReviewQueue() {
                     <span className="small muted row sm wrap" style={{ rowGap: 0 }}>
                       <StatusPill tone={w.tone}>{w.label}</StatusPill>
                       {t.roles?.length ? <span>{t.roles.map((r) => (r === 'buyer' ? 'Buyer' : 'Supplier')).join(', ')}</span> : null}
-                      {t.is_fixture && <SourceBadge kind="simulated_fixture" />}
+                      {t.sandbox ? <span className="tag">Your sample shop</span> : t.is_fixture && <SourceBadge kind="simulated_fixture" />}
                     </span>
                   </div>
                   <span className="small muted num" title={ist(t.created_at)}>{ageText(t.created_at)}</span>
@@ -77,13 +83,15 @@ export function ReviewTaskView({ tid }: { tid: string }) {
 }
 
 function TaskBody({ d, reload }: { d: TnReviewTaskDetail; reload: () => void }) {
+  const rv = useReviewerMode();
   const t = d.task;
   const b = d.business;
   const w = taskWord(t.status);
   const conflicts = d.checks.filter((c) => c.fields?.some((f) => f.match === false) || c.status === 'conflict' || c.status === 'failed');
   const doneChecks = d.checks.filter((c) => !['pending', 'inconclusive'].includes(c.status) && c.status !== 'not_applicable');
   const outstanding = d.summary?.outstanding || [];
-  const audit = d.audit && d.audit.length ? d.audit : t.decisions.map((x) => ({ action: x.action, reason: x.reason, actor: x.reviewer_hash, at: x.at }));
+  const audit = d.audit && d.audit.length ? d.audit : t.decisions.map((x) => ({ action: x.action, reason: x.reason, actor: x.demo ? `${x.label || 'Demo reviewer action'} · ${x.reviewer_hash || ''}` : x.reviewer_hash, at: x.at }));
+  const demo = !!(d as { demo?: boolean }).demo || (!!b?.is_fixture && !rv.reviewer);
   return (
     <>
       <div className="tn-hero">
@@ -136,7 +144,8 @@ function TaskBody({ d, reload }: { d: TnReviewTaskDetail; reload: () => void }) 
         </section>
       )}
 
-      <Decide d={d} onDone={reload} />
+      {demo && <Callout tone="neutral" icon="flask" title="Demo reviewer">{DEMO_REVIEW_NOTE}</Callout>}
+      <Decide d={d} onDone={reload} demo={demo} />
 
       <section>
         <SectionHead title="Audit history" />
@@ -186,7 +195,7 @@ function ManualCheck({ m }: { m: NonNullable<TnReviewTaskDetail['manual_checks']
   );
 }
 
-function Decide({ d, onDone }: { d: TnReviewTaskDetail; onDone: () => void }) {
+function Decide({ d, onDone, demo }: { d: TnReviewTaskDetail; onDone: () => void; demo?: boolean }) {
   const [action, setAction] = useState<TnReviewAction | null>(null);
   const [scope, setScope] = useState<string>('identity');
   const [reason, setReason] = useState('');
@@ -198,7 +207,12 @@ function Decide({ d, onDone }: { d: TnReviewTaskDetail; onDone: () => void }) {
     if (!action || reason.trim().length < 5) return;
     setBusy(true); setErr(null); setOk(null);
     const sc = action === 'approve_identity' ? 'identity' : claimScoped ? scope : scope.startsWith('claim:') ? scope : 'identity';
-    try { await reviewDecision(d.task.tid, { action, scope: sc, reason: reason.trim() }); setOk(`${ACTIONS.find((x) => x.a === action)?.label} recorded.`); setAction(null); setReason(''); onDone(); }
+    try {
+      const r = await reviewDecision(d.task.tid, { action, scope: sc, reason: reason.trim() }) as { note?: string; demo?: boolean } | null;
+      const label = ACTIONS.find((x) => x.a === action)?.label;
+      setOk(r?.demo || demo ? `Demo reviewer action: ${label} recorded. ${r?.note || ''}` : `${label} recorded.`);
+      setAction(null); setReason(''); onDone();
+    }
     catch (e) { setErr(e); } finally { setBusy(false); }
   }
   return (
@@ -220,7 +234,7 @@ function Decide({ d, onDone }: { d: TnReviewTaskDetail; onDone: () => void }) {
             <textarea className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. GST portal shows trade name 'Sri Laxmi General Store'; same legal name and address; spelling variant only." />
           </label>
           <Button type="submit" variant={action === 'reject_claim' ? 'danger' : 'primary'} busy={busy} busyLabel="Recording…" disabled={reason.trim().length < 5}>{ACTIONS.find((x) => x.a === action)?.label}</Button>
-          <p className="xs muted">A decision changes the business’s verification record, not credit or order limits.</p>
+          <p className="xs muted">{demo ? 'Demo reviewer action on simulated data. It never changes a real business. ' : ''}A decision changes the business’s verification record, not credit or order limits. Approving credit or large orders always waits for a Sauda reviewer and the trading partner; that hold is intended, not an error.</p>
         </form>
       )}
       {ok && <Callout tone="ok">{ok}</Callout>}

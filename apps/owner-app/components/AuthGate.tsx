@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AUTH_MODE, onUser, signInWithGoogle } from '@/lib/auth';
 import { MOCK } from '@/lib/api';
@@ -16,7 +17,15 @@ const EXPLORE: { href: string; label: string; hint: string }[] = [
   { href: '/trust/latest', label: 'See the signed record', hint: 'Every step of a real run' },
   { href: '/attack', label: 'Try to trick Sauda', hint: 'Send a hostile supplier message' },
   { href: '/savings/demo', label: 'Savings', hint: 'What negotiation saved' },
+  { href: '/', label: 'What is Sauda?', hint: 'The product page' },
 ];
+
+/** Where to go after sign-in: an explicit same-site ?next= path, else stay on the page that asked. */
+function nextPath(): string | null {
+  if (typeof window === 'undefined') return null;
+  const n = new URLSearchParams(window.location.search).get('next');
+  return n && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/\\') ? n : null;
+}
 
 /** Decorative product preview, drawn with CSS. Hidden from assistive tech. */
 function IntroArt() {
@@ -101,6 +110,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<{ name: string; email: string } | null | undefined>(undefined);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
   useEffect(() => {
     if (MOCK || AUTH_MODE === 'demo') { setUser({ name: 'Shop owner', email: '' }); return; }
     let off = () => {};
@@ -109,7 +119,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
   if (user === undefined) return <div className="narrow" aria-busy="true" aria-label="Checking sign-in"><Skeleton lines={3} /></div>;
   if (!user) {
-    const signIn = () => { setBusy(true); setErr(null); signInWithGoogle().catch((e) => setErr(String(e?.message || e))).finally(() => setBusy(false)); };
+    const signIn = () => { setBusy(true); setErr(null); signInWithGoogle().then(() => { const n = nextPath(); if (n) router.replace(n); }).catch((e) => setErr(String(e?.message || e))).finally(() => setBusy(false)); };
     return <SignedOut busy={busy} err={err} onSignIn={signIn} />;
   }
   return (

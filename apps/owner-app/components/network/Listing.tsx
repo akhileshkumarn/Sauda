@@ -34,7 +34,7 @@ export function ListingSettings({ business, summary, onSaved }: { business: TnBu
     categories: l.categories, service_area: { ...sa, basis: 'self_declared', label: `${areaLabel(sa)} (self-declared)` },
     min_order_paise: minRupees ? Math.round(Number(minRupees) * 100) : null, notes: l.notes || null,
     trust: {
-      category: summary?.category || 'additional_review_required', category_text: (summary?.category_label || 'Not checked yet') + (business.is_fixture ? ' (simulated demo data)' : ''),
+      category: summary?.category || 'additional_review_required', category_text: (summary?.category_label || 'Verification pending') + (business.sandbox ? ' (sample)' : business.is_fixture ? ' (simulated demo data)' : ''),
       dims: (summary?.dimensions || []).filter((d) => PREVIEW_DIMS.includes(d.dim)).map((d) => ({ dim: d.dim, status: d.status, source_kind: d.source_kind })),
     },
     last_checked_at: summary?.dimensions?.map((d) => d.checked_at).filter(Boolean).sort().pop() || null,

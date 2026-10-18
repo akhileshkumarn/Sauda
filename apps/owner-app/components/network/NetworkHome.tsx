@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { categoryWord, counterpartyOf, listInvitations, listRelationships, myBusinesses, pickBusiness, relWord, rememberBid, useIsReviewer } from '@/lib/network';
+import { categoryWord, counterpartyOf, listInvitations, listRelationships, myBusinesses, pickBusiness, relWord, rememberBid, useReviewerMode } from '@/lib/network';
 import { relTime } from '@/lib/format';
 import { useAsync } from '@/lib/useAsync';
 import type { TnBusinessMine, TnRelationship } from '@/lib/types';
@@ -9,13 +9,14 @@ import { ButtonLink, EmptyState, ErrorState, Icon, SectionHead, Skeleton, Status
 import { SegmentedControl } from '../ui-client';
 import { NIcon, SimulatedNote, hasSimulated } from './shared';
 import { IncomingRequests } from './IncomingRequests';
+import { SampleBanner, SampleShopButton } from './SampleShop';
 
 export function NetworkHome() {
   const mine = useAsync(() => myBusinesses(), []);
   const [bid, setBid] = useState<string | null>(null);
   useEffect(() => { if (mine.data) setBid(pickBusiness(mine.data)?.bid || null); }, [mine.data]);
   const biz = mine.data?.find((b) => b.bid === bid) || null;
-  const reviewer = useIsReviewer();
+  const rv = useReviewerMode();
 
   return (
     <div className="narrow">
@@ -33,13 +34,14 @@ export function NetworkHome() {
             onChange={(v) => { setBid(v); rememberBid(v); }} />
         </div>
       )}
+      {biz?.sandbox && <SampleBanner onChanged={mine.reload} />}
       {biz && <BusinessCard b={biz} />}
       {biz && <Relationships biz={biz} />}
-      {reviewer && (
+      {(
         <section>
-          <SectionHead title="Reviewer" />
+          <SectionHead title={rv.reviewer ? 'Reviewer' : 'Review (demo)'} />
           <Link href="/review" className="rowlink" style={{ borderTop: '1px solid var(--line)' }}>
-            <div className="grow stack xs"><span className="strong">Review console</span><span className="small muted">Businesses waiting for a human check</span></div>
+            <div className="grow stack xs"><span className="strong">Review console{rv.reviewer ? '' : ' · Demo'}</span><span className="small muted">{rv.reviewer ? 'Businesses waiting for a human check' : 'Try the human review on demo businesses and your sample shop. Real businesses are reviewed only by Sauda reviewers.'}</span></div>
             <span className="chev-ico"><Icon name="chev" size={16} /></span>
           </Link>
         </section>
@@ -51,12 +53,15 @@ export function NetworkHome() {
 function StartCard() {
   return (
     <div className="stack">
-      <EmptyState icon="shield" title="Verify your business"
-        action={<div className="stack sm" style={{ width: '100%', maxWidth: 320 }}>
-          <ButtonLink href="/network/onboard?role=buyer" block>Verify my business</ButtonLink>
-          <ButtonLink href="/network/onboard?role=seller" variant="secondary" block>Verify my supplier business</ButtonLink>
+      <EmptyState icon="shield" title="Set up your business on Sauda"
+        action={<div className="stack sm" style={{ width: '100%', maxWidth: 340 }}>
+          <ButtonLink href="/network/onboard/voice" icon="mic" block>Talk to set up my business</ButtonLink>
+          <ButtonLink href="/network/onboard?role=buyer" variant="secondary" block>Fill in a form</ButtonLink>
+          <SampleShopButton block variant="secondary" />
+          <ButtonLink href="/network/discover" variant="ghost" block>Just browse suppliers</ButtonLink>
         </div>}>
-        About five minutes. Sauda checks what it can against official or authorised sources and tells you plainly what is still self-declared. We never ask for Aadhaar.
+        About five minutes by voice or form. Sauda checks what it can against official or authorised sources and tells you plainly what is still self-declared. We never ask for Aadhaar.
+        Or try every step first with a sample shop: simulated data that only you can see.
       </EmptyState>
     </div>
   );
@@ -64,7 +69,7 @@ function StartCard() {
 
 function BusinessCard({ b }: { b: TnBusinessMine }) {
   const s = b.summary;
-  const w = categoryWord(s?.category, b.roles);
+  const w = categoryWord(s?.category, b.roles, b.sandbox);
   const outstanding = s?.outstanding?.length || 0;
   return (
     <section className="bizcard" aria-label="Your business">
@@ -80,6 +85,7 @@ function BusinessCard({ b }: { b: TnBusinessMine }) {
       </div>
       {s ? <StatusPill tone={w.tone} size="lg">{w.label}</StatusPill> : <StatusPill tone="neutral">Not checked yet</StatusPill>}
       {s?.next_step && <p className="small muted">{s.next_step}</p>}
+      {s && w.tone !== 'ok' && <p className="small muted">Nothing is blocked while this finishes: you can find suppliers, send and answer requests, list your business and switch roles. Only credit and large-order approvals wait for a person to review.</p>}
       {(b.is_fixture || hasSimulated(s?.dimensions)) && <SimulatedNote>This sample business uses demo records, not live government lookups.</SimulatedNote>}
       <div className="row sm wrap">
         <ButtonLink href={`/network/business/${encodeURIComponent(b.bid)}`} size="sm">{outstanding ? `See verification · ${outstanding} to do` : 'See verification'}</ButtonLink>

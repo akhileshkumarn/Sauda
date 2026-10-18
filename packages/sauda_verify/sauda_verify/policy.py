@@ -65,7 +65,7 @@ CATEGORY_LABELS = {
     Category.identity_confirmed: "Identity confirmed",
     Category.evidence_reviewed: "Evidence reviewed",
     Category.ready_for_counterparty_review: "Ready for counterparty review",
-    Category.additional_review_required: "Additional review required",
+    Category.additional_review_required: "Partially verified",
     Category.verification_unsuccessful: "Verification unsuccessful",
 }
 

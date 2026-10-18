@@ -568,3 +568,5 @@ from .session_routes import router as session_router  # noqa: E402  (restock ses
 app.include_router(session_router)
 from .trust_network_routes import router as tn_router  # noqa: E402  (Trust Network: /tn/*, /review/*)
 app.include_router(tn_router)
+from .onboarding_routes import router as onboarding_router  # noqa: E402  (voice onboarding: /tn/onboarding*)
+app.include_router(onboarding_router)

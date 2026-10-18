@@ -161,7 +161,7 @@ export function ConfirmView({ id }: { id: string }) {
       {declined && (
         <div className="stack">
           <Callout tone="neutral" title="Declined.">Nothing was ordered. Your limits stay active, so you can run the negotiation again.</Callout>
-          <ButtonLink href="/" variant="secondary">Back to home</ButtonLink>
+          <ButtonLink href="/dashboard" variant="secondary">Back to dashboard</ButtonLink>
         </div>
       )}
       {open && failedN > 0 && <Callout tone="bad">A safety check failed, so this cart cannot be approved. Decline it and start again.</Callout>}

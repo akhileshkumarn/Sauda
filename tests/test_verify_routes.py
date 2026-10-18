@@ -256,7 +256,8 @@ def test_transition_table():
 def test_review_queue_reviewers_only_and_reason_required(tn):
     bid = mk(tn, "alice", legal_name="Ravi Store").json()["bid"]
     tn.client.post(f"/tn/businesses/{bid}/verify", json={"consents": {"gst": True}}, headers=auth("alice"))
-    assert tn.client.get("/review/queue", headers=auth("alice")).status_code == 403
+    demo_q = tn.client.get("/review/queue", headers=auth("alice"))  # demo mode: real businesses never listed
+    assert demo_q.status_code == 200 and all(t["bid"] != bid for t in demo_q.json())
     q = tn.client.get("/review/queue", headers=auth("rita")).json()
     assert q and q[0]["bid"] == bid and "field_mismatch" in q[0]["reasons"]
     tid = q[0]["tid"]
@@ -330,7 +331,8 @@ def test_act_as_fixture_users_only(tn):
     tn.client.post("/tn/fixtures/seed", headers=OP)
     h = {**OP, "X-Act-As": "fx-user-srilakshmi"}
     assert tn.client.get("/tn/businesses/fx_buyer_srilakshmi", headers=h).status_code == 200
-    assert tn.client.get("/review/queue", headers=h).status_code == 403  # acting as a user drops reviewer rights
+    dq = tn.client.get("/review/queue", headers=h)  # acting as a user drops reviewer rights: demo mode only
+    assert dq.status_code == 200 and dq.json() and all(t["demo"] and t["is_fixture"] for t in dq.json())
     assert tn.client.get("/tn/businesses/fx_seller_deccan", headers=h).status_code == 404
     assert tn.client.get("/tn/businesses/mine", headers={**OP, "X-Act-As": "alice"}).status_code == 403
     assert tn.client.get("/tn/businesses/mine", headers={**auth("alice"), "X-Act-As": "fx-user-srilakshmi"}).status_code == 403

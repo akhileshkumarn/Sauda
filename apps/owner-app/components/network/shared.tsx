@@ -130,8 +130,8 @@ export function DimensionList({ dims, checks, compare = true }: { dims?: TnDimen
   );
 }
 
-export function CategoryHero({ summary, roles, title, children }: { summary: TnSummary; roles?: TnRole[]; title?: ReactNode; children?: ReactNode }) {
-  const w = categoryWord(summary.category, roles);
+export function CategoryHero({ summary, roles, title, children, sample }: { summary: TnSummary; roles?: TnRole[]; title?: ReactNode; children?: ReactNode; sample?: boolean }) {
+  const w = categoryWord(summary.category, roles, sample);
   return (
     <div className="tn-hero">
       {title && <p className="small muted break">{title}</p>}

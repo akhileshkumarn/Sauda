@@ -211,7 +211,7 @@ def test_unknown_tier():
 # ---------------------------------------------------------------- text
 def test_summary_is_plain_english_without_scores():
     s = policy.summarize([ck("identity", "preliminary_validation", "verified")], biz(auth=AuthorityStatus.pending), now=T0)
-    assert s.category_label == "Additional review required"
+    assert s.category_label == "Partially verified"
     assert s.next_step and s.outstanding and s.limitations
     dumped = s.model_dump_json().lower()
     assert "score" not in dumped.replace("numeric trust score", "") and "probab" not in dumped

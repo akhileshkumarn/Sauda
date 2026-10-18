@@ -10,6 +10,7 @@ import type { TnBusinessFull, TnEvidence, TnEvidenceType, TnSummary } from '@/li
 import { Button, ButtonLink, Callout, ErrorState, Icon, SectionHead, Skeleton } from '../ui';
 import { Sheet } from '../ui-client';
 import { CategoryHero, DimensionList, Limitations, NIcon, SimulatedNote, hasSimulated } from './shared';
+import { SampleBanner } from './SampleShop';
 import { ListingSettings } from './Listing';
 import { ContactVerifyButton } from './ContactVerify';
 import { RoleSwitch } from './RoleSwitch';
@@ -70,7 +71,11 @@ function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; r
     <div className="narrow">
       <Back />
       {fresh && <Callout tone="ok" title="Saved.">Your checks have run. Here is where things stand.</Callout>}
-      <CategoryHero summary={s} roles={b.roles} title={<>{b.display_name}{b.address?.city ? ` · ${b.address.city}` : ''}</>} />
+      {b.sandbox && <SampleBanner onChanged={reload} />}
+      <CategoryHero summary={s} roles={b.roles} sample={b.sandbox} title={<>{b.display_name}{b.address?.city ? ` · ${b.address.city}` : ''}</>} />
+      {s.category !== 'identity_confirmed' && s.category !== 'evidence_reviewed' && s.category !== 'ready_for_counterparty_review' && (
+        <p className="small muted">Nothing is blocked while verification finishes. You can find suppliers, send and answer requests, list your business and switch roles now. Only approving credit or large orders waits for a person to review; that is intended.</p>
+      )}
       <SimulatedNote show={sim} />
 
       <section aria-labelledby="out-h" className={`stack sm ${outstanding.length ? 'tn-todo' : ''}`}>
