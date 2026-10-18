@@ -64,6 +64,7 @@ class AuthorityStatus(StrEnum):
 
 
 class RelState(StrEnum):
+    requested = "requested"  # a buyer asked to connect from supplier discovery
     invited = "invited"
     accepted = "accepted"
     onboarding = "onboarding"

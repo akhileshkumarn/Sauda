@@ -10,6 +10,7 @@ import type { TnBusinessFull, TnEvidence, TnEvidenceType, TnSummary } from '@/li
 import { Button, ButtonLink, Callout, ErrorState, Icon, SectionHead, Skeleton } from '../ui';
 import { Sheet } from '../ui-client';
 import { CategoryHero, DimensionList, Limitations, NIcon, SimulatedNote, hasSimulated } from './shared';
+import { ListingSettings } from './Listing';
 
 const MAX_MB = 8;
 
@@ -106,6 +107,8 @@ function Body({ data, fresh, reload }: { data: TnBusinessFull; fresh: boolean; r
           </div>
         </details>
       </section>
+
+      {b.roles.includes('seller') && <ListingSettings business={b} summary={s} />}
 
       <Documents bid={b.bid} key={`docs-${data.checks.length}`} />
 

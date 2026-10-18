@@ -311,7 +311,7 @@ def test_reject_claim_makes_unsuccessful(tn):
 def test_seed_operator_only_and_idempotent(tn):
     assert tn.client.post("/tn/fixtures/seed", headers=auth("alice")).status_code == 403
     a = tn.client.post("/tn/fixtures/seed", headers=OP).json()
-    assert a["created"]["businesses"] == 4 and a["created"]["relationships"] == 1
+    assert a["created"]["businesses"] == 6 and a["created"]["relationships"] == 1
     counts = {k: len(v) for k, v in tn.db.data.items() if k.startswith("tn_")}
     b = tn.client.post("/tn/fixtures/seed", headers=OP).json()
     assert b["created"] == {"businesses": 0, "checks": 0, "reviews": 0, "relationships": 0}
@@ -323,7 +323,7 @@ def test_seed_operator_only_and_idempotent(tn):
     assert {"field_mismatch", "representative_authority_unknown"} <= set(q["rv_fx_buyer_srilakshmi"]["reasons"])
     assert "brand_authorisation_unconfirmed" in q["rv_fx_seller_deccan"]["reasons"]
     c = tn.client.post("/tn/fixtures/seed?reset=true", headers=OP).json()
-    assert c["removed"] > 0 and c["created"]["businesses"] == 4
+    assert c["removed"] > 0 and c["created"]["businesses"] == 6
 
 
 def test_act_as_fixture_users_only(tn):

@@ -37,12 +37,12 @@ owner-app (Next.js)  ──►  buyer-agent FastAPI
 
 | Collection | Key | Notes |
 |---|---|---|
-| `tn_businesses/{bid}` | `biz_*`, or `fx_*` for fixtures | Declared fields, `members`, `version` (for optimistic concurrency), `gstin_norm` and `name_pin_key` (duplicate detection), `contact` (masked only), `contact_hash` (HMAC), `requirements` (the seller's tiers) |
+| `tn_businesses/{bid}` | `biz_*`, or `fx_*` for fixtures | `listing {listed, categories, service_area {kind, districts, states, basis: self_declared}, min_order_paise, notes, updated_at}` (opt-in, sellers only). Declared fields, `members`, `version` (for optimistic concurrency), `gstin_norm` and `name_pin_key` (duplicate detection), `contact` (masked only), `contact_hash` (HMAC), `requirements` (the seller's tiers) |
 | `tn_checks/{check_id}` | random | One row for each source result: `dim`, `source_kind`, `status`, `fields[{field, declared, observed, match}]`, `checked_at`, `expires_at`, and `reviewer` on human-review rows |
 | `tn_cases/{case_id}` | `case_<sha(bid, inputs_hash)>` | A verify run. The deterministic id makes the run idempotent |
 | `tn_evidence/{eid}` | `ev_<sha256[:20]>_<bid suffix>` | `gcs_uri`, `sha256`, `mime`, `size`, `extracted`, `guard`, `reused_by_other_business`, `retention_until` |
 | `tn_reviews/{tid}` | `rv_<bid>` | One task per business: `reasons`, `status` (open, needs_evidence, in_review, escalated, approved or rejected), and an append-only `decisions[]` |
-| `tn_relationships/{rid}` | `rel_<sha(buyer, seller)>` | `state`, `provenance`, `requirements`, `approved_tiers`, `human_review`, `history[]` |
+| `tn_relationships/{rid}` | `rel_<sha(buyer, seller)>` | `state` (adds `requested`), `provenance` (adds `discovery_request`), `requirements`, `approved_tiers`, `human_review`, `history[]`, and `request {message, message_blocked, guard, categories, at}` for discovery requests |
 | `tn_invitations/{iid}` | `inv_<sha(from_bid, contact_hash, role)>` | Stores `token_hash` (sha256) and `contact_masked`. Never stores the token or the raw contact |
 
 Every state change is also appended to the existing signed ledger under the chain `biz-<bid>`. Emails and phone numbers are masked before writing, and VPAs are masked by the existing ledger adapter. `GET /tn/businesses/{bid}/ledger` returns the events with their hash, link and signature verification.
@@ -196,6 +196,64 @@ Approving identity never approves a relationship. A relationship is approved onl
 | Annapurna Rice Traders (rice wholesaler) | `fx-user-annapurna` | Clean simulated records |
 | Deccan Edible Oils (distributor) | `fx-user-deccan` | Claims Fortune brand authorisation, so `distribution_authority` is pending human review |
 | Metro Distributors | `fx-user-metro` | Linked to the existing simulated supplier `metro`. The relationship is `accepted`, with provenance `self_declared` |
+| Pune Dry Fruits & Spices Co. (Pune 411002, Maharashtra) | `fx-user-pune` | Clean simulated records. Listed for Pune district only |
+| Bengaluru Home Care Supplies (Bengaluru 560068, Karnataka) | `fx-user-blr` | Clean simulated records. Listed for all of Karnataka |
+
+All five fixture sellers are listed in Find suppliers with simulated, self-declared service areas: Annapurna (Hyderabad district; staples, rice), Deccan (Telangana; edible oil), Metro (all India; FMCG, staples, packaged foods, personal care), Pune Dry Fruits (Pune district; dry fruits, spices) and Bengaluru Home Care (Karnataka; cleaning, personal care). A seed over fixtures created before listings existed adds the listing once (`listings_added`); later edits are kept.
+
+## Supplier discovery (Find suppliers)
+
+Buyers find suppliers who chose to be listed, check how far each one is verified, and ask to connect. The routes live in `buyer_agent/trust_network_discovery.py`, registered on the same router.
+
+### Listing (opt-in, sellers only)
+
+`PUT /tn/businesses/{bid}/listing {version, listed, categories, service_area: {kind, districts, states}, min_order_paise?, notes?}`
+
+- Members only, and the business must have the `seller` role (otherwise 403 `seller_role_required`). Optimistic `version`, 409 `version_conflict`.
+- `service_area.kind` is `district`, `state` or `pan_india`. Districts and states are validated against the data.gov.in PIN directory (`data/pincodes`) and stored in its upper-case spelling; a district's state is filled in from the directory. Unknown names return 422 `invalid_area` with `invalid: [...]`.
+- The service area is stored with `basis: "self_declared"`, and every card labels it "(self-declared)". Sauda does not check delivery coverage.
+- `categories` are lower-cased (max 12, one required when listed). `notes` are at most 200 characters, with phone numbers and emails masked.
+- Each change writes `tn.listing.updated` to the business's ledger chain. The response includes `card`, the exact card buyers will see.
+- Helpers: `GET /tn/areas` (states and districts from the directory) and `GET /tn/listing-categories`.
+
+### Discovery
+
+`GET /tn/discover?bid=&q=&category=&scope=district|state|india&district=&state=&verified_only=true&limit=20&cursor=`
+
+- **Who:** the caller must be a member of a business with the `buyer` role, otherwise 403 `buyer_profile_required` (the app sends them to onboarding). `bid` picks one of several buyer businesses.
+- **Default area:** the buyer's district and state come from its declared PIN via the PIN directory (the district matching the declared city when a PIN spans two).
+- **Scopes:**
+  - `district`: sellers whose area covers the district: the district itself, the whole state, or all India.
+  - `state`: sellers covering any district of the state, the whole state, or all India.
+  - `india`: every listed seller.
+- **`verified_only` (default true):** keeps sellers whose category is `identity_confirmed`, `evidence_reviewed` or `ready_for_counterparty_review`. A real business is judged by the unchanged policy. A fixture is judged only by its own simulated results (treated as registry results for this filter), its `category_text` ends "(simulated demo data)", and its card has `is_fixture: true` and `fixture_label: "Simulated (demo data)"`. Simulated results still never satisfy relationship readiness.
+- **Ranking:** delivers to the buyer's district first, then the strength of the category (ready > evidence reviewed > identity confirmed), then most recently checked, then name. Never price or quality; the response carries `sort_note: "Sorted by delivery area and verification status, not by price or quality"`.
+- **Card:** `bid, display_name, city, district, state, categories, service_area {kind, districts, states, basis, label}, min_order_paise, notes, delivers_to_viewer, trust {category, category_text, dims [{dim, label, status, source_kind}]}` for identity, registration, address, operational, representative and distribution authority, `last_checked_at, is_fixture, fixture_label, connection (none | requested | connected | declined), rid`.
+- **Never in a card:** GSTIN (not even masked), contacts, the address line or PIN, members, documents, evidence, customers or relationships with other businesses.
+- Unlisted businesses never appear. Pagination is an opaque offset `cursor`; `next_cursor` is null on the last page.
+- Rate limit: 60 requests a minute per user (429 `rate_limited`).
+
+### Request to connect
+
+`POST /tn/connect {from_bid, to_bid, categories, message?}`
+
+- `from_bid` must be the caller's buyer business (403 `buyer_profile_required`), and `to_bid` a listed seller (404 otherwise).
+- Creates `rel_<sha(buyer, seller)>` in the new state **`requested`**, with `provenance: "discovery_request"` and `initiated_by_bid` set to the buyer. Categories are limited to those the seller lists.
+- **Idempotent per (buyer, seller):** if any relationship exists for the pair (from an invitation, a request or a decline), it is returned with `duplicate: true`.
+- At most 20 new requests per buyer business per day (429 `rate_limited`).
+- The message (at most 300 characters) is untrusted text. It is screened with the existing Model Armor guard and the verdict is stored in `request.guard`. A blocked message is not stored (`message: null, message_blocked: true`); phones and emails in a clean message are masked.
+- Writes `tn.relationship.requested` to both businesses' ledger chains.
+
+### Seller handling
+
+- The seller sees requests in `GET /tn/relationships?bid=` (state `requested`).
+- `POST /tn/relationships/{rid}/decision`:
+  - `{action: "accept_request", reason}` moves `requested → accepted → onboarding`;
+  - `{action: "decline", reason}` moves `requested → declined`.
+  - Only seller members may act on a `requested` relationship (403 `not_approver`).
+- New transitions: `requested: {accepted, declined}`. Nothing else leaves `requested`, so a request can never jump to `approved_for_trading`.
+- After acceptance the existing onboarding, review and approval flow applies unchanged: `prepaid_small` still needs identity and registration confirmed by a confirming source or reviewer, and credit and large orders still need a person (409 `human_review_required`).
+- While a request is open, both sides can read each other's redacted profile (the same `GET /tn/businesses/{bid}/profile` rules), which is what "your redacted trust profile is shared" means in the app.
 
 ## Privacy and retention
 
@@ -216,4 +274,7 @@ Approving identity never approves a relationship. A relationship is approved onl
 - Device location shows where a phone was, not who owns the premises.
 - The review task is one per business. Relationship-level reviews are recorded on the relationship (`human_review`), not as separate tasks.
 - Counterparty access is read-only and redacted. Field-level sharing preferences (`shared_fields`) are stored but not yet configurable.
+- Discovery loads listed sellers with one equality query on `listing.listed` and filters in memory. This is fine for the pilot; a larger directory needs per-state indexing.
+- The discovery and connect rate limits are per process (in memory), like the existing owner limits.
+- Service areas are self-declared and not checked against actual deliveries.
 - Firestore array-membership queries are used for "my businesses". The other lookups are equality queries on small collections.

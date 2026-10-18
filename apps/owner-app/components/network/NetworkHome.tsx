@@ -8,6 +8,7 @@ import type { TnBusinessMine, TnRelationship } from '@/lib/types';
 import { ButtonLink, EmptyState, ErrorState, Icon, SectionHead, Skeleton, StatusPill } from '../ui';
 import { SegmentedControl } from '../ui-client';
 import { NIcon, SimulatedNote, hasSimulated } from './shared';
+import { IncomingRequests } from './IncomingRequests';
 
 export function NetworkHome() {
   const mine = useAsync(() => myBusinesses(), []);
@@ -92,6 +93,7 @@ const GROUPS: { key: string; title: string; states: string[] }[] = [
   { key: 'ok', title: 'Approved for trading', states: ['approved_for_trading'] },
   { key: 'prog', title: 'In progress', states: ['accepted', 'onboarding', 'under_review', 'paused'] },
   { key: 'inv', title: 'Invited', states: ['invited'] },
+  { key: 'req', title: 'Requests sent', states: ['requested'] },
   { key: 'closed', title: 'Declined', states: ['declined'] },
 ];
 
@@ -102,7 +104,12 @@ function Relationships({ biz }: { biz: TnBusinessMine }) {
   const isBuyer = biz.roles.includes('buyer') || !isSeller;
   const invites = (
     <div className="stack sm">
-      {isBuyer && <Link href={`/network/invite?role=seller&bid=${encodeURIComponent(biz.bid)}`} className="rowlink" style={{ borderTop: '1px solid var(--line)' }}>
+      {isBuyer && <Link href="/network/discover" className="rowlink" style={{ borderTop: '1px solid var(--line)' }}>
+        <span className="none" style={{ color: 'var(--accent)' }}><Icon name="shield" size={18} /></span>
+        <div className="grow stack xs"><span className="strong">Find verified suppliers</span><span className="small muted">Listed suppliers who deliver to your area</span></div>
+        <span className="chev-ico"><Icon name="chev" size={16} /></span>
+      </Link>}
+      {isBuyer && <Link href={`/network/invite?role=seller&bid=${encodeURIComponent(biz.bid)}`} className="rowlink">
         <span className="none" style={{ color: 'var(--accent)' }}><Icon name="plus" size={18} /></span>
         <div className="grow stack xs"><span className="strong">Invite a supplier</span><span className="small muted">Distributors and wholesalers you already buy from</span></div>
         <span className="chev-ico"><Icon name="chev" size={16} /></span>
@@ -121,8 +128,9 @@ function Relationships({ biz }: { biz: TnBusinessMine }) {
   return (
     <>
       {all.length === 0 && open.length === 0 && <EmptyState icon="link" title="No trading relationships yet">Invite the businesses you already trade with. They verify themselves; each of you decides whether to trade.</EmptyState>}
+      <IncomingRequests rels={all} myBid={biz.bid} onChange={rels.reload} />
       {GROUPS.map((g) => {
-        const rows = all.filter((r) => g.states.includes(r.state));
+        const rows = all.filter((r) => g.states.includes(r.state) && !(r.state === 'requested' && r.seller_bid === biz.bid));
         if (!rows.length) return null;
         return (
           <section key={g.key} aria-label={g.title}>
