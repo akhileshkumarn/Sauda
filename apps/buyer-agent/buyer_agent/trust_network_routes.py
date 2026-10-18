@@ -36,6 +36,7 @@ from sauda_verify.models import (
     Check,
     CheckStatus,
     Dim,
+    FieldCompare,
     RelState,
     ReviewerStamp,
     SourceKind,
@@ -220,7 +221,7 @@ def _index_fields(doc: dict) -> dict:
 
 
 def _public_business(b: dict) -> dict:
-    return {k: v for k, v in b.items() if k not in ("contact_hash", "gstin_norm", "name_pin_key")}
+    return {k: v for k, v in b.items() if k not in ("contact_hash", "contact_hashes", "gstin_norm", "name_pin_key")}
 
 
 # ---------------------------------------------------------------- business models
@@ -274,6 +275,16 @@ class BusinessPatch(BaseModel):
     roles: list[Literal["buyer", "seller"]] | None = None
 
 
+def _contact_hashes(phone: str | None, email: str | None) -> dict:
+    """Keyed hash per declared contact kind, so a later contact OTP can be compared without the raw value."""
+    out = {}
+    for raw in (phone, email):
+        if raw:
+            k, n = tn.normalize_contact(raw)
+            out[k] = tn.keyed_hash(n, "contact")
+    return out
+
+
 def _contact(phone: str | None, email: str | None) -> tuple[dict, str | None]:
     out, hashes = {}, []
     if phone:
@@ -309,6 +320,7 @@ def create_business_doc(body: BusinessIn, v: Viewer, *, bid: str | None = None, 
         "constitution": body.constitution, "category": body.category, "products": body.products,
         "gstin": body.gstin, "udyam": body.udyam, "fssai": body.fssai, "cin_llpin": body.cin_llpin,
         "address": body.address.model_dump(), "geo": None, "contact": contact, "contact_hash": chash,
+        "contact_hashes": _contact_hashes(body.phone, body.email),
         "representative": rep, "brand_claims": body.brand_claims, "requirements": body.requirements,
         "owner_uid": v.uid, "members": [v.uid], "is_fixture": fixture, "created_at": now, "updated_at": now, "version": 1,
     }
@@ -373,7 +385,26 @@ def patch_business(bid: str, body: BusinessPatch, v: Viewer = Depends(viewer)):
     changes = body.model_dump(exclude_unset=True, exclude={"version"})
     if "requirements" in changes:
         _validate_requirements(changes["requirements"])
+    added, removed = [], []
+    if "roles" in changes:
+        roles = sorted(set(changes["roles"] or []), key=["buyer", "seller"].index)
+        if not roles:
+            return _err(422, "role_required", "A business needs at least one role: buying, selling or both.")
+        changes["roles"] = roles
+        old_roles = set(b.get("roles") or [])
+        added = [r for r in roles if r not in old_roles]
+        removed = [r for r in ("buyer", "seller") if r in old_roles and r not in roles]
+        for role in removed:
+            in_use = _relationships_needing(bid, role)
+            if in_use:
+                side = "selling" if role == "seller" else "buying"
+                return _err(409, "role_in_use", f"You still have active trading relationships where you are {side}. "
+                            "Pause or end them before turning this off.", role=role, relationships=in_use)
+        if not added and not removed:
+            del changes["roles"]
     new = {**b, **changes}
+    if "seller" in removed and (new.get("listing") or {}).get("listed"):
+        new["listing"] = {**new["listing"], "listed": False, "updated_at": tn.iso()}  # stop showing in Find suppliers
     if "representative" in changes:
         rep = dict(changes["representative"])
         old = b.get("representative") or {}
@@ -392,8 +423,79 @@ def patch_business(bid: str, body: BusinessPatch, v: Viewer = Depends(viewer)):
     except tn.VersionConflict as e:
         return _err(409, "version_conflict", "This business changed elsewhere; reload it.",
                     current=_public_business(e.current) if e.current else None)
-    ledger(bid, "tn.business.updated", uid_hash(v.uid), {"bid": bid, "fields": sorted(changes), "version": saved["version"]})
-    return _public_business(saved)
+    actor = uid_hash(v.uid)
+    ledger(bid, "tn.business.updated", actor, {"bid": bid, "fields": sorted(changes), "version": saved["version"]})
+    if not (added or removed):
+        return _public_business(saved)
+    for role in removed:
+        ledger(bid, "tn.business.role_removed", actor, {"bid": bid, "role": role, "roles": saved["roles"], "version": saved["version"]})
+    new_checks: list[dict] = []
+    for role in added:
+        rows, reused = _role_checks(saved, role)
+        new_checks += rows
+        ledger(bid, "tn.business.role_added", actor, {"bid": bid, "role": role, "roles": saved["roles"], "version": saved["version"],
+                                                       "identity_checks_reused": True, "idempotent": reused,
+                                                       "checks": [{k: c[k] for k in ("check_id", "dim", "check_type", "status")} for c in rows]})
+    if new_checks or removed:
+        _ensure_review(saved, f"case_role_{bid}", actor)
+    out = _public_business(saved)
+    out["role_change"] = {"added": added, "removed": removed,
+                          "new_checks": [{k: c.get(k) for k in ("check_id", "dim", "check_type", "status", "summary")} for c in new_checks],
+                          "listing_eligibility": _listing_eligibility(saved) if "seller" in saved["roles"] else None}
+    return out
+
+
+# ---------------------------------------------------------------- role switch helpers
+ACTIVE_REL_STATES = {"requested", "invited", "accepted", "onboarding", "under_review", "approved_for_trading", "paused"}
+
+
+def _relationships_needing(bid: str, role: str) -> list[str]:
+    """Relationships (not declined) in which this business plays `role`; removing the role would orphan them."""
+    side = "seller_bid" if role == "seller" else "buyer_bid"
+    return sorted(r["rid"] for r in tn.relationships_of(bid) if r.get(side) == bid and r.get("state") in ACTIVE_REL_STATES)
+
+
+SELLER_PROVIDERS = {"bank"}  # providers that apply only because the business sells
+
+
+def _role_checks(biz: dict, role: str) -> tuple[list[dict], bool]:
+    """Run only the checks that a newly added role makes applicable, through the same provider path as verify.
+    Identity and registration checks already on file are reused, never re-run. Idempotent: the case id is derived
+    from the business, the role and its declared inputs, so adding the same role again returns the same rows."""
+    if role != "seller":
+        return [], False  # buying adds no buyer-only checks
+    bid = biz["bid"]
+    ih = _inputs_hash(biz, {})
+    case_id = f"case_role_{tn.stable_hash([bid, role, ih])[:20]}"
+    case = {"case_id": case_id, "bid": bid, "purpose": f"role_added:{role}", "status": "open", "inputs_hash": ih,
+            "created_at": tn.iso(), "is_fixture": bool(biz.get("is_fixture"))}
+    if not tn.create(tn.CASES, case_id, case):
+        return [c for c in tn.checks_of(bid) if c.get("case_id") == case_id], True
+    have = tn.checks_of(bid)
+    have_types = {c.get("check_type") for c in have}
+    ctx = {"mode": "verify", "consents": {}, "is_fixture": bool(biz.get("is_fixture")), "now": tn.iso(), "role_added": role}
+    rows = []
+    if "bank_account_validation" not in have_types:
+        rows += run_providers(biz, case_id, ctx, names=SELLER_PROVIDERS)
+    if biz.get("brand_claims"):
+        rows += _baseline_checks(biz, case_id, {"representative"} | {c["dim"] for c in have})
+    for c in rows:
+        tn.put(tn.CHECKS, c["check_id"], c)
+    tn.update(tn.CASES, case_id, {"status": "completed"})
+    return rows, False
+
+
+def _listing_eligibility(biz: dict) -> dict:
+    """Whether the business can list in Find suppliers, and whether it passes the default 'verified only' filter."""
+    from .trust_network_discovery import VERIFIED_CATEGORIES
+
+    cat = policy.category(_checks(biz["bid"]), _model(biz), evidence=tn.evidence_of(biz["bid"]))
+    shown = cat in VERIFIED_CATEGORIES
+    return {"can_list": True, "listed": bool((biz.get("listing") or {}).get("listed")), "category": cat.value,
+            "shown_with_verified_only": shown,
+            "note": ("You can list in Find suppliers. Buyers who keep 'verified only' on will see you."
+                     if shown else "You can list in Find suppliers, but buyers who keep 'verified only' on will not see you "
+                     "until your business identity is confirmed.")}
 
 
 # ---------------------------------------------------------------- checks from providers
@@ -591,7 +693,12 @@ def business_summary(bid: str, v: Viewer = Depends(viewer)):
 @router.get("/tn/businesses/{bid}/checks")
 def business_checks(bid: str, v: Viewer = Depends(viewer)):
     _require_member(bid, v)
-    return tn.checks_of(bid)
+    out = []
+    for c in tn.checks_of(bid):
+        if "contact_hash" in (c.get("observed") or {}):
+            c = {**c, "observed": {k: x for k, x in c["observed"].items() if k != "contact_hash"}}
+        out.append(c)
+    return out
 
 
 @router.get("/tn/businesses/{bid}/ledger")
@@ -714,7 +821,7 @@ async def upload_evidence(bid: str, file: UploadFile = File(...), type: str = Fo
                                  source_name="Uploaded document", status=CheckStatus.pending, evidence_ids=[eid],
                                  summary=f"{type.replace('_', ' ').capitalize()} uploaded; waiting for a reviewer to compare it with the declared details."))
     ev = {"eid": eid, "bid": bid, "type": type, "gcs_uri": f"gs://{bucket}/{path}", "sha256": digest, "mime": mime, "size": len(data),
-          "extracted": tn.mask_deep(extracted), "guard": guard, "reused_by_other_business": reused,
+          "extracted": tn.mask_deep(extracted), "contact_hashes": _extracted_contact_hashes(extracted), "guard": guard, "reused_by_other_business": reused,
           "uploaded_by_hash": uid_hash(v.uid), "consent": True, "is_fixture": bool(b.get("is_fixture")), "created_at": tn.iso(),
           "retention_until": tn.iso(tn.now() + timedelta(days=EVIDENCE_RETENTION_DAYS))}
     tn.put(tn.EVIDENCE, eid, ev)
@@ -786,6 +893,198 @@ def post_location(bid: str, body: LocationIn, v: Viewer = Depends(viewer)):
                                              "checks": [{k: c[k] for k in ("check_id", "status")} for c in checks]})
     _ensure_review(b, case_id, actor)
     return {"checks": checks, "summary": summary_of(b)}
+
+
+# ---------------------------------------------------------------- business contact (phone / email one-time code)
+CONTACT_OTP_PER_HOUR = 5
+CONTACT_TOKEN_MAX_AGE_S = 15 * 60
+CONTACT_TEMP_USER_MAX_AGE_S = 60 * 60
+CONTACT_OTP_SOURCE = "Firebase Authentication OTP"
+_contact_hits: dict[str, list[float]] = {}
+
+
+def _contact_limited(bid: str) -> bool:
+    import time
+
+    now = time.time()
+    hits = [t for t in _contact_hits.get(bid, []) if now - t < 3600]
+    if len(hits) >= CONTACT_OTP_PER_HOUR:
+        _contact_hits[bid] = hits
+        return True
+    _contact_hits[bid] = [*hits, now]
+    return False
+
+
+def _contact_fb_app():
+    """The same Firebase project the owner signs in with; the browser uses a second, temporary app instance."""
+    import firebase_admin
+
+    try:
+        return firebase_admin.get_app()
+    except ValueError:
+        return firebase_admin.initialize_app(options={"projectId": settings().project})
+
+
+def _delete_temp_contact_user(claims: dict, owner_uid: str) -> str:
+    """Delete the temporary Firebase user created by the phone/email sign-in, so no stray accounts remain.
+    Only a user that is not the owner, has just this one sign-in method and was created in the last hour is
+    deleted; an existing account that happens to own the number or address is never touched."""
+    from firebase_admin import auth as fb_auth
+
+    uid = claims.get("uid") or claims.get("sub") or ""
+    if not uid or uid == owner_uid:
+        return "kept_owner_account"
+    try:
+        app = _contact_fb_app()
+        u = fb_auth.get_user(uid, app=app)
+        providers = {p.provider_id for p in (u.provider_data or [])}
+        created_ms = getattr(u.user_metadata, "creation_timestamp", None) or 0
+        import time
+
+        fresh = created_ms and (time.time() * 1000 - created_ms) < CONTACT_TEMP_USER_MAX_AGE_S * 1000
+        if len(providers) > 1 or not fresh:
+            return "kept_existing_account"
+        fb_auth.delete_user(uid, app=app)
+        return "deleted"
+    except Exception:
+        log.warning("temporary contact user cleanup failed", exc_info=True)
+        return "cleanup_failed"
+
+
+def _declared_contact_hash(b: dict, kind: str) -> str | None:
+    hashes = b.get("contact_hashes") or {}
+    if hashes.get(kind):
+        return hashes[kind]
+    c = b.get("contact") or {}
+    # older records keep one hash: the phone's when a phone was declared, otherwise the email's
+    if kind == "phone" and c.get("phone_masked"):
+        return b.get("contact_hash")
+    if kind == "email" and c.get("email_masked") and not c.get("phone_masked"):
+        return b.get("contact_hash")
+    return None
+
+
+def _document_contact_hashes(bid: str, kind: str) -> list[tuple[str, str]]:
+    """(evidence type, keyed hash) for contacts extracted from uploaded GST / Udyam / FSSAI documents."""
+    out = []
+    for e in tn.evidence_of(bid):
+        if e.get("type") not in ("gst_certificate", "udyam_certificate", "fssai_licence"):
+            continue
+        for h in (e.get("contact_hashes") or {}).get(kind) or []:
+            out.append((e["type"], h))
+    return out
+
+
+def _extracted_contact_hashes(extracted: dict) -> dict:
+    out: dict[str, list[str]] = {}
+    for key, val in (extracted or {}).items():
+        if not isinstance(val, str) or not val.strip():
+            continue
+        k = key.lower()
+        if not any(w in k for w in ("phone", "mobile", "email", "contact")):
+            continue
+        kind, n = tn.normalize_contact(val)
+        if (kind == "phone" and len(n) == 10) or (kind == "email" and "@" in n):
+            out.setdefault(kind, []).append(tn.keyed_hash(n, "contact"))
+    return out
+
+
+class ContactVerifyIn(BaseModel):
+    kind: Literal["phone", "email"]
+    id_token: str = Field(min_length=20, max_length=8192)
+
+
+@router.post("/tn/businesses/{bid}/contact/verify")
+def verify_contact(bid: str, body: ContactVerifyIn, v: Viewer = Depends(viewer)):
+    """Record that a member proved control of the business phone or email with a Firebase one-time code.
+    The browser signs in on a second, temporary Firebase app (the owner's session is untouched) and sends that
+    session's ID token. Only a keyed hash and a masked value are stored."""
+    b = _require_member(bid, v, allow_reviewer=False)
+    if _contact_limited(bid):
+        return _err(429, "rate_limited", f"At most {CONTACT_OTP_PER_HOUR} contact verification attempts an hour for a business.")
+    from firebase_admin import auth as fb_auth
+
+    try:
+        app = _contact_fb_app()
+    except Exception:
+        log.warning("firebase admin unavailable for contact verification", exc_info=True)
+        return _err(503, "contact_verification_unavailable", "Phone/email verification isn't switched on yet.")
+    try:
+        claims = fb_auth.verify_id_token(body.id_token, app=app)
+    except Exception:
+        return _err(401, "invalid_contact_token", "The verification sign-in could not be confirmed. Send a new code and try again.")
+    import time
+
+    auth_time = int(claims.get("auth_time") or 0)
+    if not auth_time or time.time() - auth_time > CONTACT_TOKEN_MAX_AGE_S:
+        return _err(401, "invalid_contact_token", "That code was confirmed too long ago. Send a new code and try again.")
+    provider = ((claims.get("firebase") or {}).get("sign_in_provider") or "").lower()
+    if body.kind == "phone":
+        raw = claims.get("phone_number") or ""
+        if not raw or provider not in ("phone", ""):
+            return _err(422, "contact_missing", "The sign-in did not include a phone number confirmed by a code.")
+    else:
+        raw = claims.get("email") or ""
+        if not raw:
+            return _err(422, "contact_missing", "The sign-in did not include an email address.")
+        if claims.get("email_verified") is not True:
+            return _err(422, "email_not_verified", "The email address was not confirmed. Open the sign-in link sent to it.")
+        if provider not in ("emaillink", "password", ""):
+            return _err(422, "contact_missing", "Use the email sign-in link to confirm the business email.")
+    kind, norm = tn.normalize_contact(raw)
+    if kind != body.kind or (kind == "phone" and len(norm) != 10):
+        return _err(422, "contact_missing", "Only Indian mobile numbers (+91) and email addresses can be confirmed here.")
+    masked = tn.mask_contact(kind, norm)
+    chash = tn.keyed_hash(norm, "contact")
+    cleanup = _delete_temp_contact_user(claims, v.uid)
+
+    label = "phone" if kind == "phone" else "email"
+    fields = [FieldCompare(field=f"business_{label}", declared=None, observed=masked, match=None)]
+    review_note = None
+    declared_hash = _declared_contact_hash(b, kind)
+    declared_match = None
+    if declared_hash:
+        declared_match = secrets.compare_digest(declared_hash, chash)
+        declared_masked = (b.get("contact") or {}).get(f"{label}_masked")
+        fields[0] = FieldCompare(field=f"business_{label}", declared=declared_masked, observed=masked, match=declared_match)
+    doc_hashes = _document_contact_hashes(bid, kind)
+    doc_match = None
+    if doc_hashes:
+        doc_match = any(secrets.compare_digest(h, chash) for _, h in doc_hashes)
+        fields.append(FieldCompare(field=f"document_{label}", declared=", ".join(sorted({t for t, _ in doc_hashes})),
+                                   observed=masked, match=doc_match))
+    summary = (f"Controls the business {label} {masked}. This shows access to the business contact, "
+               "not legal authority to act for the business.")
+    status = CheckStatus.partially_verified
+    if declared_match is True:
+        summary += f" It matches the {label} declared when the business was added."
+    if doc_match is True:
+        summary += f" It matches the {label} on an uploaded registration document."
+    if declared_match is False or doc_match is False:
+        status = CheckStatus.inconclusive
+        which = " and ".join(w for w, m in (("the declared " + label, declared_match), ("the uploaded document", doc_match)) if m is False)
+        review_note = f"The confirmed {label} differs from {which}."
+        summary += f" {review_note} A reviewer needs to look at this."
+    case_id = f"case_contact_{bid}"
+    tn.create(tn.CASES, case_id, {"case_id": case_id, "bid": bid, "purpose": "business_contact", "status": "open",
+                                  "created_at": tn.iso(), "is_fixture": bool(b.get("is_fixture"))})
+    check = _check_doc(bid, case_id, dim=Dim.representative, check_type="business_contact_otp",
+                       source_kind=SourceKind.authorised_provider, source_name=CONTACT_OTP_SOURCE, status=status,
+                       summary=summary, fields=[f.model_dump() for f in fields],
+                       observed={"kind": kind, "masked": masked, "contact_hash": chash, "declared_match": declared_match,
+                                 "document_match": doc_match, "review_reason": review_note,
+                                 "proves": "control of the business contact", "does_not_prove": "authority to act for the business"})
+    tn.put(tn.CHECKS, check["check_id"], check)
+    actor = uid_hash(v.uid)
+    ledger(bid, "tn.contact.verified", actor, {"check_id": check["check_id"], "kind": kind, "masked": masked, "status": status.value,
+                                              "declared_match": declared_match, "document_match": doc_match,
+                                              "temp_user": cleanup})
+    _ensure_review(b, case_id, actor)
+    left = CONTACT_OTP_PER_HOUR - len(_contact_hits.get(bid, []))
+    pub = {k: x for k, x in check.items() if k != "observed"}
+    pub["observed"] = {k: x for k, x in check["observed"].items() if k != "contact_hash"}
+    return {"check": pub, "contact": {"kind": kind, "masked": masked, "declared_match": declared_match, "document_match": doc_match},
+            "temp_user": cleanup, "attempts_left": max(left, 0), "summary": summary_of(b)}
 
 
 # ---------------------------------------------------------------- invitations

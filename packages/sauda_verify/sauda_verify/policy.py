@@ -55,6 +55,10 @@ KEY_DIMS = (Dim.identity, Dim.registration, Dim.representative)
 CORE_DIMS = (Dim.identity, Dim.registration, Dim.address, Dim.operational, Dim.representative)
 # Fallback order when no check is positive: the most informative non-positive status is shown.
 FALLBACK_ORDER = [S.pending, S.inconclusive, S.self_declared, S.stale, S.not_applicable]
+# Checks that show control of a business channel (phone/email one-time code) but never authority to act for the
+# business. They can lift the representative dimension to partially_verified at most, and never satisfy it: authority
+# still needs a document reviewed by a person.
+CHANNEL_ONLY_CHECKS = {"business_contact_otp"}
 CANCELLED_WORDS = {"cancelled", "canceled", "suspended", "inactive", "struck off", "strike off"}
 
 CATEGORY_LABELS = {
@@ -119,6 +123,8 @@ def effective_status(c: Check, now: datetime | None = None) -> CheckStatus:
     """A positive check past its expiry is shown as stale; negative findings (conflict/failed) do not expire."""
     if c.status in POSITIVE | {S.self_declared, S.pending, S.inconclusive} and is_stale(c, now):
         return S.stale
+    if c.check_type in CHANNEL_ONLY_CHECKS and c.status == S.verified:
+        return S.partially_verified  # a contact code never verifies anything on its own
     return c.status
 
 
@@ -147,13 +153,22 @@ def satisfies(d: DimensionSummary) -> bool:
     """Whether a rolled-up dimension counts as evidenced for categories and requirement checks."""
     if d.status not in POSITIVE or d.source_kind is None:
         return False
+    if d.check_type in CHANNEL_ONLY_CHECKS:
+        return False  # control of a contact channel is not authority to act for the business
     allowed = CONFIRMING if d.dim in STRONG_DIMS else EVIDENTIAL
     return d.source_kind in allowed
 
 
 # ---------------------------------------------------------------- dimension rollup
 def _pick(cands: list[Check]) -> Check:
-    return max(cands, key=lambda c: (SOURCE_RANK[c.source_kind], c.status == S.verified, c.checked_at or ""))
+    # channel-only checks (contact codes) lose to any other check of the same kind of status
+    return max(cands, key=lambda c: (c.check_type not in CHANNEL_ONLY_CHECKS, SOURCE_RANK[c.source_kind],
+                                     c.status == S.verified, c.checked_at or ""))
+
+
+def _ds(dim: Dim, status: CheckStatus, c: Check) -> DimensionSummary:
+    return DimensionSummary(dim=dim, status=status, source_kind=c.source_kind, summary=c.summary, checked_at=c.checked_at,
+                            check_type=c.check_type)
 
 
 def rollup_dimension(dim: Dim, checks: list[Check], now: datetime | None = None) -> DimensionSummary:
@@ -166,19 +181,17 @@ def rollup_dimension(dim: Dim, checks: list[Check], now: datetime | None = None)
     for bad in (S.conflict, S.failed):  # a conflict dominates everything, then a failure
         hits = [c for c in mine if c.status == bad]
         if hits:
-            c = _pick(hits)
-            return DimensionSummary(dim=dim, status=bad, source_kind=c.source_kind, summary=c.summary, checked_at=c.checked_at)
+            return _ds(dim, bad, _pick(hits))
     pos = [c for c in mine if c.status in POSITIVE]
     if pos:
         c = _pick(pos)
-        return DimensionSummary(dim=dim, status=c.status, source_kind=c.source_kind, summary=c.summary, checked_at=c.checked_at)
+        return _ds(dim, c.status, c)
     for st in FALLBACK_ORDER:
         hits = [c for c in mine if c.status == st]
         if hits:
-            c = _pick(hits)
-            return DimensionSummary(dim=dim, status=st, source_kind=c.source_kind, summary=c.summary, checked_at=c.checked_at)
+            return _ds(dim, st, _pick(hits))
     c = _pick(mine)  # pragma: no cover - every status is covered above
-    return DimensionSummary(dim=dim, status=c.status, source_kind=c.source_kind, summary=c.summary, checked_at=c.checked_at)
+    return _ds(dim, c.status, c)
 
 
 def dimensions(checks: Iterable[Check], biz: Business | None = None, now: datetime | None = None) -> dict[Dim, DimensionSummary]:
@@ -340,6 +353,9 @@ def outstanding(dims: dict[Dim, DimensionSummary]) -> list[str]:
             out.append(f"{label}: resolve the problem found ({s.status.value}).")
         elif s.status in (S.pending, S.inconclusive, S.self_declared, S.stale):
             out.append(f"{label}: {s.status.value.replace('_', ' ')}, needs evidence or a check.")
+        elif s.status in POSITIVE and s.check_type in CHANNEL_ONLY_CHECKS:
+            out.append(f"{label}: business contact confirmed; authority to act for the business still needs a "
+                       "document reviewed by a person.")
         elif s.status in POSITIVE and not satisfies(s):
             src = s.source_kind.value.replace("_", " ") if s.source_kind else "unknown"
             out.append(f"{label}: only {src} so far; confirm with an authorised source or a reviewer.")

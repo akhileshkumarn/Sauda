@@ -37,10 +37,10 @@ owner-app (Next.js)  ──►  buyer-agent FastAPI
 
 | Collection | Key | Notes |
 |---|---|---|
-| `tn_businesses/{bid}` | `biz_*`, or `fx_*` for fixtures | `listing {listed, categories, service_area {kind, districts, states, basis: self_declared}, min_order_paise, notes, updated_at}` (opt-in, sellers only). Declared fields, `members`, `version` (for optimistic concurrency), `gstin_norm` and `name_pin_key` (duplicate detection), `contact` (masked only), `contact_hash` (HMAC), `requirements` (the seller's tiers) |
+| `tn_businesses/{bid}` | `biz_*`, or `fx_*` for fixtures | `listing {listed, categories, service_area {kind, districts, states, basis: self_declared}, min_order_paise, notes, updated_at}` (opt-in, sellers only). Declared fields, `members`, `version` (for optimistic concurrency), `gstin_norm` and `name_pin_key` (duplicate detection), `contact` (masked only), `contact_hash` (HMAC), `contact_hashes {phone, email}` (HMAC per declared kind, for contact OTP matching), `requirements` (the seller's tiers) |
 | `tn_checks/{check_id}` | random | One row for each source result: `dim`, `source_kind`, `status`, `fields[{field, declared, observed, match}]`, `checked_at`, `expires_at`, and `reviewer` on human-review rows |
 | `tn_cases/{case_id}` | `case_<sha(bid, inputs_hash)>` | A verify run. The deterministic id makes the run idempotent |
-| `tn_evidence/{eid}` | `ev_<sha256[:20]>_<bid suffix>` | `gcs_uri`, `sha256`, `mime`, `size`, `extracted`, `guard`, `reused_by_other_business`, `retention_until` |
+| `tn_evidence/{eid}` | `ev_<sha256[:20]>_<bid suffix>` | `gcs_uri`, `sha256`, `mime`, `size`, `extracted` (masked), `contact_hashes` (HMACs of any phone/email the document extraction returned), `guard`, `reused_by_other_business`, `retention_until` |
 | `tn_reviews/{tid}` | `rv_<bid>` | One task per business: `reasons`, `status` (open, needs_evidence, in_review, escalated, approved or rejected), and an append-only `decisions[]` |
 | `tn_relationships/{rid}` | `rel_<sha(buyer, seller)>` | `state` (adds `requested`), `provenance` (adds `discovery_request`), `requirements`, `approved_tiers`, `human_review`, `history[]`, and `request {message, message_blocked, guard, categories, at}` for discovery requests |
 | `tn_invitations/{iid}` | `inv_<sha(from_bid, contact_hash, role)>` | Stores `token_hash` (sha256) and `contact_masked`. Never stores the token or the raw contact |
@@ -255,9 +255,80 @@ Buyers find suppliers who chose to be listed, check how far each one is verified
 - After acceptance the existing onboarding, review and approval flow applies unchanged: `prepaid_small` still needs identity and registration confirmed by a confirming source or reviewer, and credit and large orders still need a person (409 `human_review_required`).
 - While a request is open, both sides can read each other's redacted profile (the same `GET /tn/businesses/{bid}/profile` rules), which is what "your redacted trust profile is shared" means in the app.
 
+## Buying and selling (role switch)
+
+A business can be a buyer, a seller or both. Members change this with `PATCH /tn/businesses/{bid} {version, roles}`.
+
+- Members only, with the optimistic `version` (409 `version_conflict`). `roles` cannot be empty (422 `role_required`).
+- Each change writes `tn.business.role_added` or `tn.business.role_removed` to the ledger, next to `tn.business.updated`.
+- **Existing checks are reused.** Identity, registration, address and representative checks are not run again.
+- **Only the newly applicable checks run**, through the same provider path as verify. Adding `seller` runs:
+  - the payout bank check (`bank_account_validation`, pending until a penny-drop provider is enabled);
+  - a `brand_authorisation_claim` row when brands are claimed and none exists yet;
+  - a listing eligibility result (`role_change.listing_eligibility`): the business can list in Find suppliers, and is shown to buyers who keep "verified only" on once its identity is confirmed.
+- Adding `buyer` adds no checks.
+- **Idempotent:** the run has the case id `case_role_<sha(bid, role, declared inputs)>`. Adding the same role again returns the same rows.
+- **Removing a role** is refused with 409 `role_in_use` (with `role` and `relationships`) while any relationship that is not declined has the business on that side. Removing `seller` also unlists the business from Find suppliers.
+- The response is the business plus `role_change {added, removed, new_checks, listing_eligibility}`.
+- In the app, `components/network/RoleSwitch.tsx` on the business page has the two toggles ("I buy for my shop", "I sell to other businesses"), an explanation, a confirm step and the result.
+
+## Business contact verification (phone or email one-time code)
+
+This shows that a member controls the business phone or email. **It does not show legal authority to act for the business.**
+
+### Flow
+
+1. The app (`lib/contactOtp.ts`, `components/network/ContactVerify.tsx`) creates a **second Firebase app instance** (`initializeApp(config, "sauda-contact-verify")`, in-memory persistence). The owner's Google session on the default app is never replaced.
+   - **Phone:** an invisible reCAPTCHA and `signInWithPhoneNumber` on the second auth instance, then the SMS code.
+   - **Email:** `sendSignInLinkToEmail` with the return URL `/network/business/{bid}/verify-contact`, then `signInWithEmailLink` on return.
+2. The app sends that session's ID token: `POST /tn/businesses/{bid}/contact/verify {kind: "phone"|"email", id_token}`. It then signs the second session out.
+3. The API verifies the token with `firebase_admin` (same Firebase project) and checks that it is recent (signed in within 15 minutes).
+   - Phone: reads `phone_number`. Email: reads `email` and requires `email_verified: true` (otherwise 422 `email_not_verified`).
+   - The value is normalised (10-digit mobile, lower-case email). **Only a keyed hash and a masked value are stored.** The raw value never reaches Firestore or the ledger.
+4. The API deletes the temporary Firebase user (`auth.delete_user`), so no stray accounts remain. It never deletes the owner's own account, or an existing account that already had the number or email with another sign-in method or was created more than an hour earlier. The outcome is in `temp_user`.
+
+### Check recorded
+
+- dim `representative`, check_type `business_contact_otp`, source_kind `authorised_provider`, source_name "Firebase Authentication OTP", status `partially_verified`.
+- Summary: "Controls the business {phone|email} {masked}. This shows access to the business contact, not legal authority to act for the business."
+- **Declared contact:** when a phone or email was declared at creation, its keyed hash is compared. A match is noted in the summary and fields. A mismatch makes the check `inconclusive` and raises `field_mismatch` for a reviewer.
+- **Documents:** a phone or email extracted from an uploaded GST, Udyam or FSSAI document is compared the same way. Today's document extraction does not return contacts, so this comparison applies only when it does.
+- Ledger event `tn.contact.verified` (masked value, status, match flags). Limited to 5 attempts an hour per business (429 `rate_limited`).
+
+### Policy
+
+- A contact code **never** makes representative verified. `business_contact_otp` rows are capped at `partially_verified`, never satisfy the representative dimension (for categories or readiness tiers), and `representative_authority_unknown` stays until a reviewer confirms authority or authority evidence is uploaded.
+- Another positive representative check (an uploaded authorisation document or a reviewer's decision) always takes precedence over the contact code.
+- The `contact` provider's pending row now points to this flow when Firebase is the sign-in (`AUTH_MODE=firebase` or `CONTACT_OTP=firebase`).
+
+### When the providers are off
+
+Until Phone and Email-link sign-in are enabled in Firebase, `auth/operation-not-allowed`, `auth/configuration-not-found` and `auth/admin-restricted-operation` show "Phone/email verification isn't switched on yet", and the check stays pending.
+
+## GST registration providers (Cashfree, Setu)
+
+`providers/gst_registry.py` calls an authorised provider when its credentials are present. Otherwise it creates a manual task. Cashfree is tried first.
+
+| Provider | Env | Call |
+|---|---|---|
+| Cashfree Verification Suite | `CASHFREE_CLIENT_ID`, `CASHFREE_CLIENT_SECRET`, `CASHFREE_ENV=sandbox\|production` | `POST https://sandbox.cashfree.com/verification/gstin` (or `api.cashfree.com`), headers `x-client-id`/`x-client-secret`, body `{GSTIN, business_name}`. Reads `gst_in_status`, `legal_name_of_business`, `trade_name_of_business`, `principal_place_split_address.pincode`, `reference_id`, `valid` |
+| Setu | `SETU_CLIENT_ID`, `SETU_CLIENT_SECRET`, `SETU_PRODUCT_INSTANCE_ID`, `SETU_ENV` | `POST https://dg-sandbox.setu.co/api/verify/gst` (or `dg.setu.co`). The response mapping is defensive and must be confirmed against Setu's docs when credentials are issued |
+
+- **Sandbox** (the default) returns the provider's sample data. Rows are labelled e.g. "Cashfree GST verification (sandbox: sample data)" and capped at `inconclusive`, so sandbox data never counts as verified or as a conflict.
+- **Production** compares the record with the declared details: Active with matching names and PIN gives `verified`; an inactive status or different names gives `conflict`; a spelling near-match gives `partially_verified` for a reviewer.
+- `scripts/check_gst_provider.py [GSTIN]` loads `.env`, forces sandbox, makes one call and prints only status fields. It never prints credentials.
+
+## DigiLocker (future)
+
+Not built.
+
+- Which documents DigiLocker issues **to businesses** (as opposed to individuals), and whether GST or Udyam certificates are available that way, is UNVERIFIED.
+- A requester must onboard through API Setu partner registration before any pull is possible. Sauda has not done this.
+- Until both are settled, DigiLocker is not used, and nothing in the Trust Network claims a DigiLocker result.
+
 ## Privacy and retention
 
-- **Never stored:** Aadhaar numbers, OTPs, passwords and bank credentials.
+- **Never stored:** Aadhaar numbers, OTPs, passwords and bank credentials. Contact codes are handled by Firebase Authentication; Sauda keeps only a keyed hash and a masked copy of the confirmed contact, and deletes the temporary Firebase user.
 - **Contacts:** stored masked, plus an HMAC for matching. Raw invitation contacts are not stored.
 - **Evidence files:** go only to the private bucket at `tn/<bid>/<eid>`. A signed link valid for 10 minutes is issued to members and reviewers. Counterparties never get documents.
   - Each evidence row has `retention_until`, set to 365 days after upload. Deletion is an operational job and is not automated yet.
@@ -275,6 +346,6 @@ Buyers find suppliers who chose to be listed, check how far each one is verified
 - The review task is one per business. Relationship-level reviews are recorded on the relationship (`human_review`), not as separate tasks.
 - Counterparty access is read-only and redacted. Field-level sharing preferences (`shared_fields`) are stored but not yet configurable.
 - Discovery loads listed sellers with one equality query on `listing.listed` and filters in memory. This is fine for the pilot; a larger directory needs per-state indexing.
-- The discovery and connect rate limits are per process (in memory), like the existing owner limits.
+- The discovery, connect and contact-verification rate limits are per process (in memory), like the existing owner limits.
 - Service areas are self-declared and not checked against actual deliveries.
 - Firestore array-membership queries are used for "my businesses". The other lookups are equality queries on small collections.

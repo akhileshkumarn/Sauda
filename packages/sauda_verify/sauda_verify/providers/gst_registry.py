@@ -2,7 +2,13 @@
 
 The GST portal's taxpayer search requires a CAPTCHA and is never automated. GSTN public APIs are only
 reachable through GSPs / authorised KYB providers under contract. Adapters below are enabled only when their
-env credentials exist (none are configured today); otherwise the result is a MANUAL task.
+env credentials exist; otherwise the result is a MANUAL task.
+
+Sandbox vs production
+- Sandbox responses are sample data from the provider, not GSTN records. They are labelled
+  "<provider> (sandbox: sample data)" and capped at `inconclusive`, so they never count as verified.
+- Production responses are compared with the declared details: Active and matching -> verified; inactive or
+  different names -> conflict; a spelling near-match -> partially_verified (a reviewer confirms).
 
 Env:
   Cashfree: CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET, CASHFREE_ENV=sandbox|production
@@ -39,8 +45,11 @@ REVIEWER_FIELDS = ["legal_name", "trade_name", "status", "constitution", "regist
 
 
 class CashfreeGstClient:
-    """Cashfree Verification Suite: POST /verification/gstin {GSTIN, business_name}."""
-    name = "Cashfree GSTIN verification"
+    """Cashfree Verification Suite: POST {base}/verification/gstin, body {GSTIN, business_name}, headers x-client-id /
+    x-client-secret. Response fields (docs/VERIFICATION_SOURCES.md): reference_id, GSTIN, legal_name_of_business,
+    trade_name_of_business, date_of_registration, constitution_of_business, taxpayer_type, gst_in_status,
+    principal_place_split_address{..., state, pincode}, valid, message."""
+    name = "Cashfree GST verification"
 
     def configured(self) -> bool:
         return env_present("CASHFREE_CLIENT_ID", "CASHFREE_CLIENT_SECRET")
@@ -60,13 +69,19 @@ class CashfreeGstClient:
                        json={"GSTIN": identifier, "business_name": kw.get("business_name") or ""})
         r.raise_for_status()
         d = r.json()
-        if not d.get("valid", True) and not d.get("legal_name_of_business"):
+        return self.parse(d)
+
+    @staticmethod
+    def parse(d: dict) -> dict | None:
+        if not d or (d.get("valid") is False and not d.get("legal_name_of_business")):
             return None
         a = d.get("principal_place_split_address") or {}
         return {"gstin": d.get("GSTIN"), "legal_name": d.get("legal_name_of_business"),
                 "trade_name": d.get("trade_name_of_business"), "status": d.get("gst_in_status"),
                 "constitution": d.get("constitution_of_business"), "registration_date": d.get("date_of_registration"),
-                "pincode": str(a.get("pincode") or ""), "state": a.get("state"), "ref": d.get("reference_id")}
+                "taxpayer_type": d.get("taxpayer_type"), "pincode": str(a.get("pincode") or ""), "state": a.get("state"),
+                "ref": str(d["reference_id"]) if d.get("reference_id") is not None else None,
+                "valid": d.get("valid"), "message": d.get("message")}
 
 
 class SetuGstClient:
@@ -91,7 +106,11 @@ class SetuGstClient:
                                 "x-product-instance-id": os.environ["SETU_PRODUCT_INSTANCE_ID"],
                                 "User-Agent": USER_AGENT})
         r.raise_for_status()
-        d = (r.json() or {}).get("data") or {}
+        return self.parse(r.json() or {}, identifier)
+
+    @staticmethod
+    def parse(body: dict, identifier: str = "") -> dict | None:
+        d = (body or {}).get("data") or {}
         if not d:
             return None
         addr = (d.get("principalPlaceOfBusinessFields") or {}).get("principalPlaceOfBusinessAddress") or {}
@@ -187,5 +206,20 @@ class GstRegistryProvider:
                                    source_name=client.name, dim=Dim.registration, check_type="gst_registry",
                                    summary="The provider returned no registration for this GSTIN. Not a negative "
                                            "finding on its own; a manual check is suggested.")]
-        label = client.name + (" (sandbox: synthetic data)" if getattr(client, "sandbox", False) else "")
-        return [compare(biz, rec, label)]
+        if getattr(client, "sandbox", False):
+            return [sandbox_result(biz, rec, client.name)]
+        return [compare(biz, rec, client.name)]
+
+
+SANDBOX_CAP = {CheckStatus.verified, CheckStatus.partially_verified, CheckStatus.conflict, CheckStatus.failed}
+
+
+def sandbox_result(biz: Business, rec: dict, client_name: str) -> ProviderResult:
+    """A sandbox response is the provider's sample data: show the comparison, but never let it count. Any
+    outcome is capped at inconclusive (a sandbox 'conflict' is not a finding about the business either)."""
+    r = compare(biz, rec, f"{client_name} (sandbox: sample data)")
+    status = CheckStatus.inconclusive if r.status in SANDBOX_CAP else r.status
+    return r.model_copy(update={
+        "status": status, "observed": {**(r.observed or {}), "sandbox": True, "sandbox_compare_status": r.status.value},
+        "summary": ("Sandbox call to the GST provider: the response is the provider's sample data, not a GSTN record, "
+                    "so it does not count as verification. Comparison on the sample data: " + r.summary)})
