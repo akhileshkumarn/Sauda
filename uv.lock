@@ -9,6 +9,7 @@ members = [
     "sauda-data",
     "sauda-ledger",
     "sauda-trust",
+    "sauda-verify",
     "supplier-agent",
 ]
 
@@ -129,6 +130,7 @@ dependencies = [
     { name = "sauda-data" },
     { name = "sauda-ledger" },
     { name = "sauda-trust" },
+    { name = "sauda-verify" },
     { name = "sse-starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -146,6 +148,7 @@ requires-dist = [
     { name = "sauda-data", editable = "packages/sauda_data" },
     { name = "sauda-ledger", editable = "packages/sauda_ledger" },
     { name = "sauda-trust", editable = "packages/sauda_trust" },
+    { name = "sauda-verify", editable = "packages/sauda_verify" },
     { name = "sse-starlette", specifier = ">=2.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
@@ -1188,6 +1191,7 @@ dependencies = [
     { name = "sauda-data" },
     { name = "sauda-ledger" },
     { name = "sauda-trust" },
+    { name = "sauda-verify" },
     { name = "supplier-agent" },
 ]
 
@@ -1205,6 +1209,7 @@ requires-dist = [
     { name = "sauda-data", editable = "packages/sauda_data" },
     { name = "sauda-ledger", editable = "packages/sauda_ledger" },
     { name = "sauda-trust", editable = "packages/sauda_trust" },
+    { name = "sauda-verify", editable = "packages/sauda_verify" },
     { name = "supplier-agent", editable = "apps/supplier-agent" },
 ]
 
@@ -1269,6 +1274,25 @@ requires-dist = [
     { name = "google-cloud-kms", specifier = ">=3" },
     { name = "google-cloud-modelarmor", specifier = ">=0.2" },
     { name = "pydantic", specifier = ">=2.8" },
+]
+
+[[package]]
+name = "sauda-verify"
+version = "0.1.0"
+source = { editable = "packages/sauda_verify" }
+dependencies = [
+    { name = "google-genai" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "sauda-trust" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "google-genai", specifier = ">=1.30" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "sauda-trust", editable = "packages/sauda_trust" },
 ]
 
 [[package]]

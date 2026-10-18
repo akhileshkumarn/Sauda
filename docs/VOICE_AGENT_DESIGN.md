@@ -4,6 +4,10 @@ Status: working end to end against Vertex AI (Gemini 3.5 Flash, asia-south1) for
 Telugu on synthetic speech. Tested 18 Oct 2026. Not yet tested with a real human voice in a noisy shop (see
 "Limits").
 
+Update (18 Oct 2026, evening): Tamil, Kannada and Bengali audio also pass on synthetic voices; Malayalam, Marathi,
+Gujarati, Punjabi, Odia and Urdu pass typed restock and onboarding but have no test voice; Bhojpuri is beta,
+recognised as Hindi. The per-language verification table is in docs/VOICE_CONVERSATION.md ("Languages").
+
 ## What it does
 
 The owner taps **Speak**, says the restock list in English, Hindi, Telugu or a mix, and gets back:

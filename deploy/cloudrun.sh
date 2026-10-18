@@ -40,8 +40,8 @@ suppliers() {
 buyer() {
   gcloud run deploy buyer-agent --project $P --region $R --image $PY_IMAGE \
     --service-account buyer-agent@$P.iam.gserviceaccount.com --allow-unauthenticated \
-    --set-env-vars "^@^${COMMON_ENV//,/@}@SUPPLIER_URLS=metro=$(url supplier-metro),sharma=$(url supplier-sharma),quickstock=$(url supplier-quickstock)@OWNER_APP_ORIGIN=$(url owner-app),https://$SITE_DOMAIN,https://saudaai.firebaseapp.com@AUTH_MODE=${AUTH_MODE:-demo}@DEMO_PAY_AMOUNT_PAISE=${DEMO_PAY_AMOUNT_PAISE:-100}@AGENT_MODE=${AGENT_MODE:-adk}" \
-    --set-secrets "DATA_GOV_IN_API_KEY=data-gov-in-api-key:latest,DEMO_OWNER_TOKEN=demo-owner-token:latest" \
+    --set-env-vars "^|^${COMMON_ENV//,/|}|SUPPLIER_URLS=metro=$(url supplier-metro),sharma=$(url supplier-sharma),quickstock=$(url supplier-quickstock)|OWNER_APP_ORIGIN=$(url owner-app),https://$SITE_DOMAIN,https://saudaai.firebaseapp.com|AUTH_MODE=${AUTH_MODE:-demo}|DEMO_PAY_AMOUNT_PAISE=${DEMO_PAY_AMOUNT_PAISE:-100}|AGENT_MODE=${AGENT_MODE:-adk}|REVIEWER_EMAILS=${REVIEWER_EMAILS:-}" \
+    --set-secrets "DATA_GOV_IN_API_KEY=data-gov-in-api-key:latest,DEMO_OWNER_TOKEN=demo-owner-token:latest,MAPS_API_KEY=maps-geocoding-key:latest" \
     --cpu 1 --memory 1Gi --min-instances 1 --max-instances 1 --timeout 600 --quiet
   echo "buyer-agent -> $(url buyer-agent)"
 }

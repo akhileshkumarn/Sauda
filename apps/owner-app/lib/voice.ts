@@ -7,13 +7,13 @@ import { getIdToken } from './auth';
 import { mark, newUtt } from './latency';
 import { API_BASE, MOCK, SHOP_ID } from './api';
 
-export type VoiceLangHint = 'en-IN' | 'hi-IN' | 'te-IN';
+import { LANGS } from './languages';
 
-export const VOICE_LANGS: { value: VoiceLangHint; label: string; short: string }[] = [
-  { value: 'en-IN', label: 'English', short: 'en' },
-  { value: 'hi-IN', label: 'हिन्दी', short: 'hi' },
-  { value: 'te-IN', label: 'తెలుగు', short: 'te' },
-];
+/** A `lang_hint` for POST /voice/parse: a browser locale ("ta-IN"), or "bho-IN" for Bhojpuri. */
+export type VoiceLangHint = string;
+
+export const VOICE_LANGS: { value: VoiceLangHint; label: string; short: string }[] =
+  LANGS.map((l) => ({ value: l.hint, label: l.native, short: l.code }));
 
 /** Per-segment cap for the recorder fallback (the conversation itself is unlimited). */
 export const SEGMENT_MAX_MS = 25_000;
@@ -51,7 +51,7 @@ export interface VoicePreview {
 
 export interface VoiceParseResult {
   transcript: string;
-  language: 'en' | 'hi' | 'te' | 'other' | string;
+  language: string; // en, hi, te, ta, kn, ml, mr, bn, gu, pa, or, ur, bho or other
   languages?: string[];
   preview: VoicePreview | null;
   notes: string[];
@@ -135,7 +135,7 @@ async function mockParse(lang: VoiceLangHint, signal?: AbortSignal): Promise<Voi
       unmatched: [], stated_budget_paise: 800000,
       clarifications: [{ owner_words: 'Maggi noodles', question: 'Which Maggi pack?', options: [{ gtin: '8901058000000', name: 'Masala Noodles', brand: 'Maggi', pack_size: '70 g' }, { gtin: '8901058000001', name: 'Masala Noodles', brand: 'Maggi', pack_size: '280 g' }] }],
     },
-    notes: ['Mock voice result.', 'Preview only. Nothing is ordered until you sign a mandate and approve the final cart.'],
+    notes: ['Preview only. Nothing is ordered until you sign a mandate and approve the final cart.'],
   };
 }
 

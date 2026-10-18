@@ -9,7 +9,7 @@
   font: inherit; font-weight: 650; font-size: 15px; cursor: pointer;
 }
 .mic:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
-.mic:focus-visible, .opt:focus-visible, .lang:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; border-color: var(--accent); }
+.mic:focus-visible, .opt:focus-visible, .lang:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
 .mic:disabled { opacity: .55; cursor: not-allowed; }
 .micBusy { color: var(--ink-2); }
 
@@ -32,7 +32,7 @@
 .line { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 14px; }
 .clar { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; background: var(--warn-soft); }
 .opt {
-  appearance: none; font: inherit; font-size: 13px; min-height: 36px; padding: 6px 12px; border-radius: 999px;
+  appearance: none; font: inherit; font-size: 13px; min-height: 44px; padding: 8px 14px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
 }
 .opt:hover { border-color: var(--accent); color: var(--accent); }

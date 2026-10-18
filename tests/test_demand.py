@@ -43,7 +43,7 @@ def test_messy_request_keeps_owner_qty_and_budget(offline):
 def test_hinglish(offline):
     d = demand.build_draft("demo", "das packet Aashirvaad atta 1 kilo aur bees Tata namak")
     n = by_name(d)
-    assert n["Aashirvaad Superior MP Atta"]["qty"] == 10 and n["Salt LITE"]["qty"] == 20
+    assert n["Aashirvaad Superior MP Atta"]["qty"] == 10 and n["Tata Salt LITE"]["qty"] == 20
     assert d["clarifications"] == [] and d["stated_budget_paise"] is None
 
 

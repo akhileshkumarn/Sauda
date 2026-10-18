@@ -594,3 +594,476 @@ export function mockNegotiationView(nid: string): NegotiationView {
   };
 }
 export type { ClarOption };
+
+// ======================================================================
+// Trust Network fixtures (NEXT_PUBLIC_MOCK=1). Every registry-like result is
+// source_kind "simulated_fixture": these are demo records, not real lookups.
+// ======================================================================
+import type {
+  TnBusiness, TnBusinessMine, TnCheck, TnEvidence, TnInvitation, TnLedger, TnInvitationCreated, TnInvitationPublic, TnProfile,
+  TnRelationship, TnReviewTask, TnReviewTaskDetail, TnSummary,
+} from './types';
+
+const tnAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+const TN_LIMITS = [
+  'Some results on this page are not checked against a government registry yet.',
+  'A valid GSTIN shows a registration exists. It does not prove the business is trustworthy or still trading at this address.',
+  'Location is a one-time device reading near the stated address, not a site visit.',
+  'Missing public information is not a sign of fraud. Many small shops have no online presence.',
+];
+
+function tnBiz(p: Partial<TnBusiness> & Pick<TnBusiness, 'bid' | 'display_name'>): TnBusiness {
+  return {
+    roles: ['seller'], products: [], address: { line: '', city: 'Hyderabad', state: 'Telangana', pin: '500001' },
+    representative: { name: '', role: '', authority_status: 'self_declared' }, contact: {}, is_fixture: true,
+    created_at: tnAgo(60 * 26), updated_at: tnAgo(30), version: 1, ...p,
+  };
+}
+
+const tnState = {
+  businesses: {
+    fx_lakshmi: tnBiz({
+      bid: 'fx_lakshmi', roles: ['buyer'], display_name: 'Sri Lakshmi General Stores', legal_name: 'Sri Lakshmi General Stores',
+      constitution: 'proprietorship', category: 'kirana', products: ['Staples', 'Edible oil', 'Packaged food'],
+      gstin: '36ABCPL1234F1Z5', udyam: 'UDYAM-TS-02-0012345', fssai: '13624010000123',
+      address: { line: 'Shop 4, Main Road, Ameerpet', city: 'Hyderabad', state: 'Telangana', pin: '500016' },
+      geo: { lat: 17.4375, lng: 78.4483, accuracy_m: 35, captured_at: tnAgo(50), consent: true },
+      contact: { phone_masked: '98•••••210' },
+      representative: { name: 'K. Lakshmi', role: 'Proprietor', authority_status: 'pending' },
+    }),
+    fx_annapurna: tnBiz({
+      bid: 'fx_annapurna', display_name: 'Annapurna Rice Traders', legal_name: 'Annapurna Rice Traders', constitution: 'partnership',
+      category: 'wholesaler', products: ['Rice', 'Pulses'], gstin: '36AAHFA5678K1ZZ',
+      address: { line: 'Begum Bazaar', city: 'Hyderabad', state: 'Telangana', pin: '500012' },
+      representative: { name: 'S. Rao', role: 'Partner', authority_status: 'verified' },
+    }),
+    fx_deccan: tnBiz({
+      bid: 'fx_deccan', display_name: 'Deccan Edible Oils', legal_name: 'Deccan Edible Oils Pvt Ltd', constitution: 'private_limited',
+      category: 'distributor', products: ['Edible oil'], gstin: '36AAECD9012M1ZH', cin_llpin: 'U15400TG2015PTC099999',
+      brand_claims: ['Fortune'], address: { line: 'Kukatpally Industrial Estate', city: 'Hyderabad', state: 'Telangana', pin: '500072' },
+      representative: { name: 'M. Reddy', role: 'Director', authority_status: 'self_declared' },
+    }),
+    fx_metro: tnBiz({
+      bid: 'fx_metro', display_name: 'Metro Distributors', category: 'distributor', products: ['Staples', 'Snacks', 'Edible oil'],
+      address: { line: 'Secunderabad', city: 'Hyderabad', state: 'Telangana', pin: '500003' },
+    }),
+  } as Record<string, TnBusiness>,
+  checks: {} as Record<string, TnCheck[]>,
+  relationships: [] as TnRelationship[],
+  invitations: [] as TnInvitation[],
+  tasks: [] as TnReviewTask[],
+  verified: new Set<string>(['fx_lakshmi', 'fx_annapurna', 'fx_deccan', 'fx_metro']),
+  seq: 1,
+};
+
+function tnCk(bid: string, c: Partial<TnCheck> & Pick<TnCheck, 'dim' | 'status' | 'source_kind' | 'source_name' | 'summary'>): TnCheck {
+  return { check_id: `chk_${bid}_${c.dim}_${tnState.seq++}`, business_id: bid, case_id: `case_${bid}`, check_type: c.dim, fields: [], evidence_ids: [], checked_at: tnAgo(45), ...c };
+}
+
+tnState.checks.fx_lakshmi = [
+  tnCk('fx_lakshmi', { dim: 'identity', check_type: 'gst_registry', status: 'partially_verified', source_kind: 'simulated_fixture', source_name: 'Not checked against a government registry yet',
+    summary: 'Legal name and state match the GST record on file. The trade name is spelled differently.',
+    fields: [
+      { field: 'Legal name', declared: 'Sri Lakshmi General Stores', observed: 'Sri Lakshmi General Stores', match: true },
+      { field: 'Trade name', declared: 'Sri Lakshmi General Stores', observed: 'Sri Laxmi General Store', match: false },
+      { field: 'State', declared: 'Telangana', observed: 'Telangana', match: true },
+      { field: 'Registration status', declared: null, observed: 'Active', match: null },
+    ] }),
+  tnCk('fx_lakshmi', { dim: 'registration', check_type: 'gstin_format', status: 'verified', source_kind: 'preliminary_validation', source_name: 'GSTIN format and checksum',
+    summary: 'The GSTIN is well-formed and its state code (36) is Telangana. Format check only.',
+    fields: [{ field: 'GSTIN', declared: '36ABCPL1234F1Z5', observed: 'Checksum valid', match: true }, { field: 'State code', declared: 'Telangana', observed: '36 · Telangana', match: true }] }),
+  tnCk('fx_lakshmi', { dim: 'address', check_type: 'device_location', status: 'partially_verified', source_kind: 'device_signal', source_name: 'Device location (with consent)',
+    summary: 'The phone was about 180 m from the geocoded address when the owner shared location.',
+    fields: [{ field: 'PIN', declared: '500016', observed: '500016', match: true }, { field: 'Distance from address', declared: null, observed: '≈180 m (accuracy 35 m)', match: null }] }),
+  tnCk('fx_lakshmi', { dim: 'representative', check_type: 'authority', status: 'pending', source_kind: 'self_declared', source_name: 'Owner declaration',
+    summary: 'K. Lakshmi says she is the proprietor. Not yet confirmed against a document.', fields: [{ field: 'Name', declared: 'K. Lakshmi', observed: null, match: null }, { field: 'Role', declared: 'Proprietor', observed: null, match: null }] }),
+  tnCk('fx_lakshmi', { dim: 'operational', check_type: 'storefront_photo', status: 'pending', source_kind: 'self_declared', source_name: 'Not yet provided', summary: 'No storefront photo yet.' }),
+  tnCk('fx_lakshmi', { dim: 'product_compliance', check_type: 'fssai', status: 'self_declared', source_kind: 'self_declared', source_name: 'Owner declaration',
+    summary: 'FSSAI number given. Not checked against the FoSCoS portal yet.', fields: [{ field: 'FSSAI', declared: '13624010000123', observed: null, match: null }] }),
+  tnCk('fx_lakshmi', { dim: 'distribution_authority', check_type: 'na', status: 'not_applicable', source_kind: 'self_declared', source_name: '—', summary: 'Only needed for sellers claiming brand authorisation.' }),
+];
+tnState.checks.fx_annapurna = [
+  tnCk('fx_annapurna', { dim: 'identity', check_type: 'gst_registry', status: 'verified', source_kind: 'simulated_fixture', source_name: 'Not checked against a government registry yet', summary: 'Legal name, trade name and state match the GST record on file.',
+    fields: [{ field: 'Legal name', declared: 'Annapurna Rice Traders', observed: 'Annapurna Rice Traders', match: true }, { field: 'State', declared: 'Telangana', observed: 'Telangana', match: true }] }),
+  tnCk('fx_annapurna', { dim: 'registration', check_type: 'gstin_format', status: 'verified', source_kind: 'preliminary_validation', source_name: 'GSTIN format and checksum', summary: 'Well-formed GSTIN. Format check only.' }),
+  tnCk('fx_annapurna', { dim: 'representative', check_type: 'authority', status: 'verified', source_kind: 'human_review', source_name: 'Sauda reviewer', summary: 'Partnership deed reviewed: S. Rao is a partner.',
+    reviewer: { uid_hash: 'rv_9a1c', decision: 'approve_claim', reason: 'Partnership deed names S. Rao as partner.', at: tnAgo(300) } }),
+  tnCk('fx_annapurna', { dim: 'address', check_type: 'geocode', status: 'verified', source_kind: 'authorised_provider', source_name: 'Geocoding', summary: 'PIN 500012 matches Hyderabad, Telangana.' }),
+];
+tnState.checks.fx_deccan = [
+  tnCk('fx_deccan', { dim: 'identity', check_type: 'gst_registry', status: 'verified', source_kind: 'simulated_fixture', source_name: 'Not checked against a government registry yet', summary: 'Legal name and state match the GST record on file.' }),
+  tnCk('fx_deccan', { dim: 'registration', check_type: 'mca', status: 'verified', source_kind: 'simulated_fixture', source_name: 'Not checked against the MCA registry yet', summary: 'Company is shown as Active in the MCA record on file.' }),
+  tnCk('fx_deccan', { dim: 'distribution_authority', check_type: 'brand_authorisation', status: 'pending', source_kind: 'uploaded_evidence', source_name: 'Uploaded authorisation letter', summary: 'Claims to distribute Fortune. Letter uploaded; waiting for a human reviewer.' }),
+];
+tnState.checks.fx_metro = [
+  tnCk('fx_metro', { dim: 'identity', check_type: 'fixture', status: 'self_declared', source_kind: 'simulated_fixture', source_name: 'Sauda partner supplier agent', summary: 'A partner supplier agent on Sauda.' }),
+];
+tnState.relationships = [
+  { rid: 'rel_fx_annapurna', buyer_bid: 'fx_lakshmi', seller_bid: 'fx_annapurna', initiated_by_bid: 'fx_lakshmi', state: 'under_review', categories: ['Rice'], provenance: 'invitation', seller_name: 'Annapurna Rice Traders', buyer_name: 'Sri Lakshmi General Stores',
+    history: [{ state: 'invited', at: tnAgo(60 * 24) }, { state: 'accepted', at: tnAgo(60 * 20) }, { state: 'onboarding', at: tnAgo(60 * 20) }, { state: 'under_review', at: tnAgo(60 * 3) }], created_at: tnAgo(60 * 24) },
+  { rid: 'rel_fx_metro', buyer_bid: 'fx_lakshmi', seller_bid: 'fx_metro', initiated_by_bid: 'fx_lakshmi', state: 'approved_for_trading', categories: ['Staples', 'Snacks'], provenance: 'confirmed_trade', seller_name: 'Metro Distributors', buyer_name: 'Sri Lakshmi General Stores',
+    history: [{ state: 'approved_for_trading', reason: 'Existing partner supplier agent; prepaid orders only.', at: tnAgo(60 * 48) }], created_at: tnAgo(60 * 72) },
+  { rid: 'rel_fx_deccan', buyer_bid: 'fx_lakshmi', seller_bid: 'fx_deccan', initiated_by_bid: 'fx_lakshmi', state: 'onboarding', categories: ['Edible oil'], provenance: 'invitation', seller_name: 'Deccan Edible Oils', buyer_name: 'Sri Lakshmi General Stores',
+    history: [{ state: 'invited', at: tnAgo(60 * 22) }, { state: 'accepted', at: tnAgo(60 * 6) }, { state: 'onboarding', at: tnAgo(60 * 6) }], created_at: tnAgo(60 * 22) },
+];
+tnState.invitations = [
+  { iid: 'inv_fx_ravi', from_bid: 'fx_lakshmi', role_invited: 'seller', contact_masked: 'ra•••@example.com', status: 'sent', expires_at: new Date(Date.now() + 12 * 86400_000).toISOString(), rid: null, categories: ['Packaged food'], display_name_hint: 'Ravi Agencies', created_at: tnAgo(60 * 22) },
+  { iid: 'inv_fx_anna', from_bid: 'fx_lakshmi', role_invited: 'seller', contact_masked: '98•••••321', status: 'accepted', expires_at: null, rid: 'rel_fx_annapurna', categories: ['Rice'], display_name_hint: 'Annapurna Rice Traders', created_at: tnAgo(60 * 24) },
+];
+tnState.tasks = [
+  { tid: 'rv_fx_lakshmi', bid: 'fx_lakshmi', case_id: 'case_fx_lakshmi', display_name: 'Sri Lakshmi General Stores', roles: ['buyer'], is_fixture: true, status: 'open', created_at: tnAgo(60 * 3),
+    reasons: ['Trade name differs from the GST record ("Sri Laxmi General Store")', 'Representative authority not yet confirmed'], decisions: [] },
+  { tid: 'rv_fx_deccan', bid: 'fx_deccan', case_id: 'case_fx_deccan', display_name: 'Deccan Edible Oils', roles: ['seller'], is_fixture: true, status: 'open', created_at: tnAgo(60 * 26),
+    reasons: ['Claims Fortune distribution authority; letter needs human review'], decisions: [] },
+];
+
+const TN_DIM_ORDER = ['identity', 'registration', 'address', 'operational', 'representative', 'product_compliance', 'distribution_authority', 'trading_references', 'payment_details', 'operational_capability'];
+const TN_CAT_LABEL: Record<string, string> = {
+  identity_confirmed: 'Identity confirmed', evidence_reviewed: 'Evidence reviewed', ready_for_counterparty_review: 'Ready for supplier review',
+  additional_review_required: 'Partially verified', verification_unsuccessful: 'Verification unsuccessful',
+};
+
+function tnSummaryFor(bid: string): TnSummary {
+  const cks = tnState.checks[bid] || [];
+  const byDim = new Map<string, TnCheck>();
+  for (const c of cks) byDim.set(c.dim, c);
+  const dims = [...byDim.values()].sort((a, b) => TN_DIM_ORDER.indexOf(a.dim) - TN_DIM_ORDER.indexOf(b.dim));
+  const core = dims.filter((c) => ['identity', 'registration', 'representative'].includes(c.dim));
+  const conflict = core.some((c) => c.status === 'conflict' || c.status === 'failed' || (c.dim === 'identity' && c.status === 'partially_verified'));
+  const idOk = dims.find((c) => c.dim === 'identity')?.status === 'verified';
+  const category = !cks.length ? 'additional_review_required' : conflict ? 'additional_review_required' : idOk ? 'ready_for_counterparty_review' : 'identity_confirmed';
+  const outstanding: string[] = [];
+  if (dims.some((c) => c.dim === 'representative' && c.status !== 'verified')) outstanding.push('authorisation_letter');
+  if (dims.some((c) => c.dim === 'operational' && c.status === 'pending')) outstanding.push('storefront_photo');
+  if (!tnState.businesses[bid]?.geo) outstanding.push('location');
+  if (dims.some((c) => c.dim === 'identity' && c.status === 'partially_verified')) outstanding.push('gst_certificate');
+  if (conflict) outstanding.push('manual_review');
+  return {
+    category, category_label: TN_CAT_LABEL[category],
+    dimensions: dims.map((c) => ({ dim: c.dim, status: c.status, source_kind: c.source_kind, summary: c.summary, checked_at: c.checked_at })),
+    outstanding, limitations: TN_LIMITS,
+    next_step: category === 'additional_review_required'
+      ? 'A Sauda reviewer will compare the trade name with your GST certificate. Uploading the certificate speeds this up.'
+      : 'Suppliers you invite can now review your profile and decide whether to trade with you.',
+    review_reasons: category === 'additional_review_required' ? ['Trade name differs from the GST record'] : [],
+  };
+}
+
+function tnErr(status: number, code: string, message: string, extra: Record<string, unknown> = {}) {
+  return Object.assign(new Error(message), { status, code, body: { detail: { code, message, ...extra } } });
+}
+function tnMaybeFail() { if (mockMode() === 'error') throw Object.assign(new Error('Failed to fetch'), { status: 0 }); }
+
+const SBX = 'sbx_mock';
+export function mockSandboxStart(first?: string) {
+  const name = (first || '').split(/\s+/)[0] || '';
+  const shopName = 'Balaji Kirana & General Stores';
+  let created = false;
+  if (!tnState.businesses[SBX]) {
+    created = true;
+    tnState.businesses[SBX] = tnBiz({
+      bid: SBX, roles: ['buyer'], display_name: shopName, legal_name: shopName, constitution: 'proprietorship',
+      category: 'kirana', products: ['Staples', 'Rice', 'Edible oil'], gstin: '',
+      address: { line: 'Shop 3, Prakash Nagar Main Road, Begumpet', city: 'Hyderabad', state: 'Telangana', pin: '500016' },
+      representative: { name, role: 'Proprietor', authority_status: 'self_declared' },
+      is_fixture: true, sandbox: true, fixture_label: 'Ready shop · Balaji Kirana & General Stores. Your copy is private to you. Add your own business any time.',
+    } as Partial<TnBusiness> as TnBusiness);
+    tnState.checks[SBX] = clone(tnState.checks.fx_lakshmi || []).map((c) => ({ ...c, business_id: SBX, check_id: `${c.check_id}_sbx` }));
+    if (!tnState.tasks.find((t) => t.bid === SBX)) {
+      tnState.tasks.push({ tid: `rv_${SBX}`, bid: SBX, case_id: `case_${SBX}`, reasons: ['Trade name differs from the GST record'], status: 'open', decisions: [],
+        created_at: new Date().toISOString(), display_name: shopName, is_fixture: true, sandbox: true });
+    }
+  }
+  return { business: { ...clone(tnState.businesses[SBX]), summary: tnSummaryFor(SBX) }, created, sandbox: true as const,
+    label: 'Ready shop · Balaji Kirana & General Stores. Your copy is private to you. Add your own business any time.', status_text: 'Partially verified' };
+}
+export function mockSandboxDelete() {
+  const existed = !!tnState.businesses[SBX];
+  delete tnState.businesses[SBX]; delete tnState.checks[SBX];
+  tnState.tasks = tnState.tasks.filter((t) => t.bid !== SBX);
+  return { ok: true, removed: existed ? 3 : 0, existed };
+}
+
+export function mockTnMine(): TnBusinessMine[] {
+  tnMaybeFail();
+  const sbx = tnState.businesses[SBX] ? [{ ...clone(tnState.businesses[SBX]), summary: tnSummaryFor(SBX) }] : [];
+  if (mockMode() === 'new' || mockMode() === 'nobuyer') return sbx;
+  if (mockMode() === 'seller') return [{ ...clone(tnState.businesses.fx_annapurna), summary: tnSummaryFor('fx_annapurna') }];
+  return [{ ...clone(tnState.businesses.fx_lakshmi), summary: tnSummaryFor('fx_lakshmi') }]
+    .concat(Object.values(tnState.businesses).filter((b) => !b.bid.startsWith('fx_')).map((b) => ({ ...clone(b), summary: tnSummaryFor(b.bid) })));
+}
+export function mockTnBusiness(bid: string) {
+  tnMaybeFail();
+  const b = tnState.businesses[bid];
+  if (!b) throw tnErr(404, 'not_found', 'No business with this id');
+  return { business: clone(b), checks: clone(tnState.checks[bid] || []), summary: tnSummaryFor(bid) };
+}
+export function mockTnSummary(bid: string): TnSummary { tnMaybeFail(); if (!tnState.businesses[bid]) throw tnErr(404, 'not_found', 'No business'); return tnSummaryFor(bid); }
+export function mockTnCreate(body: Partial<TnBusiness>): TnBusiness {
+  const gst = (body.gstin || '').toUpperCase();
+  if (gst && Object.values(tnState.businesses).some((b) => b.gstin === gst)) throw tnErr(409, 'gstin_already_registered', 'This GSTIN is already registered. Ask a member to invite you, or contact a reviewer.');
+  const dup = Object.values(tnState.businesses).find((b) => b.display_name.toLowerCase() === (body.display_name || '').toLowerCase() && b.address.pin === body.address?.pin);
+  if (dup && !(body as { confirm_not_duplicate?: boolean }).confirm_not_duplicate) throw tnErr(409, 'possible_duplicate', 'A business with the same name and PIN is already registered.', { candidates: [{ bid: dup.bid, display_name: dup.display_name, city: dup.address.city }] });
+  const bid = `biz_${Math.random().toString(36).slice(2, 8)}`;
+  const b = tnBiz({ ...body, bid, display_name: body.display_name || 'New business', is_fixture: false, version: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as TnBusiness);
+  tnState.businesses[bid] = b; tnState.checks[bid] = [];
+  return clone(b);
+}
+export function mockTnVerify(bid: string) {
+  const b = tnState.businesses[bid];
+  if (!b) throw tnErr(404, 'not_found', 'No business');
+  if (!(tnState.checks[bid] || []).length) {
+    const gst = b.gstin || '';
+    tnState.checks[bid] = [
+      gst ? tnCk(bid, { dim: 'registration', check_type: 'gstin_format', status: 'verified', source_kind: 'preliminary_validation', source_name: 'GSTIN format and checksum', summary: 'Well-formed GSTIN. Format check only.', checked_at: new Date().toISOString(), fields: [{ field: 'GSTIN', declared: gst, observed: 'Checksum valid', match: true }] })
+        : tnCk(bid, { dim: 'registration', check_type: 'none', status: 'not_applicable', source_kind: 'self_declared', source_name: 'Owner declaration', summary: 'No GSTIN given. Not every small business needs one.', checked_at: new Date().toISOString() }),
+      tnCk(bid, { dim: 'identity', check_type: 'gst_registry', status: gst ? 'verified' : 'self_declared', source_kind: gst ? 'simulated_fixture' : 'self_declared', source_name: gst ? 'Not checked against a government registry yet' : 'Owner declaration',
+        summary: gst ? 'Name and state match the GST record on file.' : 'Name is as you declared it.', checked_at: new Date().toISOString(), fields: [{ field: 'Legal name', declared: b.legal_name || b.display_name, observed: gst ? (b.legal_name || b.display_name) : null, match: gst ? true : null }] }),
+      tnCk(bid, { dim: 'address', check_type: 'pincode', status: 'partially_verified', source_kind: 'authorised_provider', source_name: 'India Post PIN directory', summary: `PIN ${b.address.pin} is in ${b.address.state || 'the stated state'}.`, checked_at: new Date().toISOString() }),
+      tnCk(bid, { dim: 'representative', check_type: 'authority', status: 'self_declared', source_kind: 'self_declared', source_name: 'Owner declaration', summary: `${b.representative.name || 'The representative'} says they are the ${b.representative.role || 'owner'}.`, checked_at: new Date().toISOString() }),
+    ];
+  }
+  return { case: { case_id: `case_${bid}`, bid, purpose: 'general', status: 'open' as const }, checks: clone(tnState.checks[bid]) };
+}
+export function mockTnLocation(bid: string, g: { lat: number; lng: number; accuracy_m: number }) {
+  const b = tnState.businesses[bid]; if (!b) throw tnErr(404, 'not_found', 'No business');
+  b.geo = { ...g, captured_at: new Date().toISOString(), consent: true };
+  const c = tnCk(bid, { dim: 'address', check_type: 'device_location', status: 'partially_verified', source_kind: 'device_signal', source_name: 'Device location (with consent)', summary: 'Device reading recorded near the stated address.', checked_at: new Date().toISOString(),
+    fields: [{ field: 'Accuracy', declared: null, observed: `${Math.round(g.accuracy_m)} m`, match: null }] });
+  tnState.checks[bid] = (tnState.checks[bid] || []).filter((x) => x.check_type !== 'device_location').concat(c);
+  return clone(c);
+}
+export function mockTnEvidence(bid: string, type: string) {
+  const c = tnCk(bid, { dim: type === 'authorisation_letter' ? 'representative' : type === 'storefront_photo' ? 'operational' : type === 'fssai_licence' ? 'product_compliance' : 'registration',
+    check_type: `doc_${type}`, status: 'pending', source_kind: 'uploaded_evidence', source_name: 'Uploaded document', summary: 'Document received. Fields are being read and will be compared with what you declared.', checked_at: new Date().toISOString() });
+  (tnState.checks[bid] ||= []).push(c);
+  return { evidence: { eid: `ev_${tnState.seq++}`, bid, type, guard: { blocked: false } }, checks: [clone(c)] };
+}
+export function mockTnProfile(bid: string): TnProfile {
+  tnMaybeFail();
+  const b = tnState.businesses[bid]; if (!b) throw tnErr(404, 'not_found', 'No business');
+  const s = tnSummaryFor(bid);
+  return {
+    bid, display_name: b.display_name, legal_name: b.legal_name, roles: b.roles, constitution: b.constitution, category: b.category, products: b.products,
+    address: { city: b.address.city, state: b.address.state }, representative: { name: b.representative.name, role: b.representative.role, authority_status: b.representative.authority_status },
+    is_fixture: b.is_fixture, summary: s,
+    checks: (tnState.checks[bid] || []).map(({ check_id, dim, source_kind, source_name, status, summary, checked_at }) => ({ check_id, dim, source_kind, source_name, status, summary, checked_at })),
+    pending_review: tnState.tasks.filter((t) => t.bid === bid && t.status === 'open').flatMap((t) => t.reasons),
+    readiness: [
+      { tier: 'prepaid_small', ready: s.category !== 'verification_unsuccessful' && (tnState.checks[bid] || []).some((c) => c.dim === 'identity' && ['verified', 'partially_verified'].includes(c.status)), missing: s.category === 'additional_review_required' ? ['human_review'] : [], note: 'Small prepaid orders.' },
+      { tier: 'credit', ready: false, missing: ['human_review', 'trading_references'], requires_human_review: true, note: 'Credit always needs a human decision outside Sauda.' },
+    ],
+  };
+}
+export function mockTnRelationships(bid: string): TnRelationship[] {
+  tnMaybeFail();
+  if (mockMode() === 'new') return [];
+  return clone(tnState.relationships.filter((r) => r.buyer_bid === bid || r.seller_bid === bid || r.initiated_by_bid === bid));
+}
+export function mockTnRelationship(rid: string): TnRelationship {
+  const r = tnState.relationships.find((x) => x.rid === rid); if (!r) throw tnErr(404, 'not_found', 'No relationship');
+  return clone(r);
+}
+export function mockTnDecision(rid: string, action: string, reason: string, tier = 'prepaid_small'): TnRelationship {
+  const r = tnState.relationships.find((x) => x.rid === rid); if (!r) throw tnErr(404, 'not_found', 'No relationship');
+  if (action === 'approve_for_trading') {
+    if (mockMode() === 'buyer') throw tnErr(403, 'not_approver', 'Only the seller decides whether to trade with this buyer.');
+    if (tier !== 'prepaid_small' && tier !== 'prepaid_regular') throw tnErr(409, 'human_review_required', 'Credit, payment and large-order terms always need a person to review.', { tier, missing: ['human_review'] });
+    const other = r.initiated_by_bid === r.buyer_bid ? r.seller_bid : r.buyer_bid;
+    const s = other ? tnSummaryFor(other) : null;
+    const missing: string[] = [];
+    if (!other || !(tnState.checks[other] || []).length) missing.push('identity', 'registration');
+    else if (s?.category === 'additional_review_required') missing.push('human_review');
+    if (mockMode() === 'missing' || missing.length) throw tnErr(409, 'requirements_not_met', 'This business does not meet your requirements yet', { missing: missing.length ? missing : ['human_review'] });
+  }
+  r.state = action === 'accept_request' ? 'onboarding' : action === 'approve_for_trading' ? 'approved_for_trading' : action === 'decline' ? 'declined' : action === 'pause' ? 'paused' : 'under_review';
+  if (action === 'approve_for_trading') r.approved_tiers = [...new Set([...(r.approved_tiers || []), tier])];
+  (r.history ||= []).push({ state: r.state, action, reason, at: new Date().toISOString() });
+  return clone(r);
+}
+export function mockTnInvite(body: { from_bid: string; role_invited: 'seller' | 'buyer'; contact: string; categories: string[]; display_name?: string }): TnInvitationCreated {
+  const c = body.contact.trim();
+  const masked = c.includes('@') ? c.replace(/^(.{1,2}).*(@.*)$/, '$1•••$2') : `${c.slice(0, 2)}•••••${c.slice(-3)}`;
+  const iid = `inv_${tnState.seq++}`;
+  const inv: TnInvitation = { iid, from_bid: body.from_bid, role_invited: body.role_invited, contact_masked: masked, status: 'sent', expires_at: new Date(Date.now() + 14 * 86400_000).toISOString(), rid: null, categories: body.categories, display_name_hint: body.display_name || null, created_at: new Date().toISOString() };
+  const dup = tnState.invitations.find((x) => x.from_bid === body.from_bid && x.contact_masked === masked && x.role_invited === body.role_invited);
+  if (dup) return { invitation: clone(dup), token: null, duplicate: true };
+  tnState.invitations.push(inv);
+  const token = `tn_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
+  return { invitation: clone(inv), token };
+}
+export function mockTnInvitationPublic(token: string): TnInvitationPublic {
+  tnMaybeFail();
+  if (token === 'expired') throw tnErr(410, 'expired', 'This invitation has expired');
+  return { from_display_name: 'Sri Lakshmi General Stores', role_invited: 'seller', status: 'sent', expires_at: new Date(Date.now() + 10 * 86400_000).toISOString() };
+}
+export function mockTnAccept(_token: string, bid: string): TnRelationship {
+  const r: TnRelationship = { rid: `rel_acc_${tnState.seq++}`, buyer_bid: 'fx_lakshmi', seller_bid: bid, initiated_by_bid: 'fx_lakshmi', state: 'accepted', categories: ['Rice'], provenance: 'invitation', buyer_name: 'Sri Lakshmi General Stores', seller_name: tnState.businesses[bid]?.display_name, history: [{ state: 'accepted', at: new Date().toISOString() }] };
+  tnState.relationships.push(r);
+  return clone(r);
+}
+export function mockReviewQueue(): TnReviewTask[] {
+  tnMaybeFail();
+  const demo = mockMode() === 'noreview';
+  return clone(tnState.tasks.filter((t) => !demo || t.bid.startsWith('fx_') || t.bid === SBX).map((t) => ({ ...t, demo })));
+}
+export function mockReviewTask(tid: string): TnReviewTaskDetail {
+  const t = tnState.tasks.find((x) => x.tid === tid); if (!t) throw tnErr(404, 'not_found', 'No review task');
+  const isL = t.bid === 'fx_lakshmi';
+  return {
+    task: clone(t), business: clone(tnState.businesses[t.bid]), checks: clone(tnState.checks[t.bid] || []), summary: tnSummaryFor(t.bid),
+    recommended_action: isL ? 'Open the GST portal, search the GSTIN, and compare the trade name. If only the spelling differs, approve identity with that reason.' : 'Open the authorisation letter and confirm it is issued by the brand owner, names this distributor and is in date. If unsure, request evidence.',
+    manual_checks: isL
+      ? [{ title: 'Search the GSTIN on the GST portal', source_url: 'https://services.gst.gov.in/services/searchtp', fields: ['Legal name on portal', 'Trade name on portal', 'Status'] }]
+      : [{ title: 'Check the company on the MCA portal', source_url: 'https://www.mca.gov.in/content/mca/global/en/mca/master-data/MDS.html', fields: ['Company status', 'Director named in letter'] }],
+    audit: [{ action: 'task_opened', reason: t.reasons.join('; '), actor: 'policy', at: t.created_at }].concat(t.decisions.map((d) => ({ action: d.action, reason: d.reason, actor: d.reviewer_hash || 'reviewer', at: d.at }))),
+  };
+}
+export function mockReviewDecision(tid: string, d: { action: string; scope: string; reason: string }): TnReviewTask {
+  const t = tnState.tasks.find((x) => x.tid === tid); if (!t) throw tnErr(404, 'not_found', 'No review task');
+  const demo = mockMode() === 'noreview';
+  t.decisions.push({ ...d, reviewer_hash: 'rv_you', at: new Date().toISOString(), ...(demo ? { demo: true, label: 'Recorded review' } : {}) });
+  t.status = d.action === 'approve_identity' || d.action === 'approve_claim' ? 'approved' : d.action === 'reject_claim' ? 'rejected' : d.action === 'escalate' ? 'escalated' : 'needs_evidence';
+  if (d.action === 'approve_identity' && t.bid === 'fx_lakshmi') {
+    const id = (tnState.checks.fx_lakshmi || []).find((c) => c.dim === 'identity');
+    if (id) { id.status = 'verified'; id.source_kind = 'human_review'; id.source_name = 'Sauda reviewer'; id.reviewer = { uid_hash: 'rv_you', decision: d.action, reason: d.reason, at: new Date().toISOString() }; }
+  }
+  return clone(t);
+}
+export function mockTnInvitations(bid: string): TnInvitation[] { tnMaybeFail(); return clone(tnState.invitations.filter((i) => i.from_bid === bid)); }
+export function mockTnRevoke(iid: string): TnInvitation {
+  const i = tnState.invitations.find((x) => x.iid === iid); if (!i) throw tnErr(404, 'not_found', 'invitation not found');
+  if (i.status !== 'sent') throw tnErr(409, 'invalid_state', `invitation is ${i.status}`);
+  i.status = 'revoked'; return clone(i);
+}
+export function mockTnEvidenceList(bid: string): TnEvidence[] {
+  return bid === 'fx_lakshmi' ? [{ eid: 'ev_fx_gst', bid, type: 'gst_certificate', mime: 'application/pdf', size: 182_000, guard: { blocked: false } }] : [];
+}
+export function mockTnLedger(bid: string): TnLedger {
+  const ev = [
+    { seq: 1, type: 'tn.business.created', ts: tnAgo(60 * 26) },
+    { seq: 2, type: 'tn.verification.run', ts: tnAgo(60 * 25) },
+    { seq: 3, type: 'tn.location.recorded', ts: tnAgo(50) },
+    { seq: 4, type: 'tn.invitation.sent', ts: tnAgo(60 * 22) },
+  ];
+  return { chain_id: `biz-${bid}`, events: ev, verification: { chain_ok: true } };
+}
+
+// ======================================================================
+// Supplier discovery (mock). Every seller here is a simulated demo business.
+// ======================================================================
+import type { TnAreas, TnConnectResponse, TnDiscoverCard, TnDiscoverQuery, TnDiscoverResponse, TnListing, TnListingSaved, TnServiceArea } from './types';
+
+const DSC_SORT = 'Sorted by delivery area and verification status, not by price or quality';
+const DSC_VIEWER = { bid: 'fx_lakshmi', display_name: 'Sri Lakshmi General Stores', district: 'HYDERABAD', state: 'TELANGANA', pin: '500016' };
+const DSC_AREAS: TnAreas = {
+  source: 'data.gov.in All India Pincode Directory',
+  states: [
+    { state: 'KARNATAKA', districts: ['BENGALURU RURAL', 'BENGALURU URBAN', 'MYSURU', 'TUMAKURU'] },
+    { state: 'MAHARASHTRA', districts: ['MUMBAI', 'NAGPUR', 'NASHIK', 'PUNE', 'THANE'] },
+    { state: 'TAMIL NADU', districts: ['CHENNAI', 'COIMBATORE', 'MADURAI'] },
+    { state: 'TELANGANA', districts: ['HYDERABAD', 'MEDCHAL MALKAJGIRI', 'RANGA REDDY', 'SANGAREDDY', 'WARANGAL'] },
+  ],
+};
+const dLabel = (a: Pick<TnServiceArea, 'kind' | 'districts' | 'states'>) => {
+  const t = (x: string) => x.toLowerCase().replace(/(^|\s)([a-z])/g, (_, p: string, c: string) => p + c.toUpperCase());
+  return (a.kind === 'pan_india' ? 'Delivers across India' : a.kind === 'state' ? `Delivers across ${a.states.map(t).join(', ')}` : `Delivers in ${a.districts.map(t).join(', ')}`) + ' (self-declared)';
+};
+const simDims = (over: Record<string, [string, string]> = {}) => (['identity', 'registration', 'address', 'operational', 'representative', 'distribution_authority'] as const).map((dim) => {
+  const [status, source_kind] = over[dim] || (dim === 'representative' ? ['pending', 'self_declared'] : dim === 'distribution_authority' ? ['not_applicable', ''] : dim === 'address' ? ['partially_verified', 'simulated_fixture'] : ['verified', 'simulated_fixture']);
+  return { dim, status, source_kind: source_kind || null };
+});
+function dCard(p: Partial<TnDiscoverCard> & Pick<TnDiscoverCard, 'bid' | 'display_name' | 'categories' | 'service_area'>): TnDiscoverCard {
+  return {
+    city: 'Hyderabad', district: 'HYDERABAD', state: 'TELANGANA', min_order_paise: null, notes: null,
+    trust: { category: 'identity_confirmed', category_text: 'Identity confirmed (showcase business)', dims: simDims() },
+    last_checked_at: tnAgo(60 * 5), is_fixture: true, fixture_label: 'Showcase business', connection: 'none', rid: null, ...p,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    service_area: { ...p.service_area, basis: 'self_declared', label: dLabel(p.service_area as any) },
+  };
+}
+const dscCards: TnDiscoverCard[] = [
+  dCard({ bid: 'fx_annapurna', display_name: 'Annapurna Rice Traders', categories: ['staples', 'rice'], min_order_paise: 500000,
+    service_area: { kind: 'district', districts: ['HYDERABAD'], states: ['TELANGANA'] }, last_checked_at: tnAgo(60 * 2),
+    notes: 'Sona masoori and basmati. Next-day delivery in Hyderabad.' }),
+  dCard({ bid: 'fx_deccan', display_name: 'Deccan Edible Oils', categories: ['edible oil'], min_order_paise: 1000000,
+    service_area: { kind: 'state', districts: [], states: ['TELANGANA'] }, last_checked_at: tnAgo(60 * 6),
+    trust: { category: 'identity_confirmed', category_text: 'Identity confirmed (showcase business)', dims: simDims({ distribution_authority: ['pending', 'self_declared'] }) } }),
+  dCard({ bid: 'fx_metro', display_name: 'Metro Distributors', categories: ['fmcg', 'staples', 'packaged foods', 'personal care'],
+    service_area: { kind: 'pan_india', districts: [], states: [] }, connection: 'connected', rid: 'rel_fx_metro', last_checked_at: tnAgo(60 * 9) }),
+  dCard({ bid: 'fx_pune', display_name: 'Pune Dry Fruits & Spices Co.', city: 'Pune', district: 'PUNE', state: 'MAHARASHTRA', categories: ['dry fruits', 'spices'],
+    min_order_paise: 300000, service_area: { kind: 'district', districts: ['PUNE'], states: ['MAHARASHTRA'] }, last_checked_at: tnAgo(60 * 20) }),
+  dCard({ bid: 'fx_bengaluru', display_name: 'Bengaluru Home Care Supplies', city: 'Bengaluru', district: 'BENGALURU URBAN', state: 'KARNATAKA', categories: ['cleaning'],
+    service_area: { kind: 'state', districts: [], states: ['KARNATAKA'] }, last_checked_at: tnAgo(60 * 30) }),
+  dCard({ bid: 'fx_unverified', display_name: 'Charminar Snacks Depot', categories: ['snacks'], service_area: { kind: 'district', districts: ['HYDERABAD'], states: ['TELANGANA'] },
+    trust: { category: 'additional_review_required', category_text: 'Partially verified (simulated demo data)', dims: simDims({ identity: ['partially_verified', 'simulated_fixture'] }) } }),
+];
+const VERIFIED = new Set(['identity_confirmed', 'evidence_reviewed', 'ready_for_counterparty_review']);
+const CAT_RANK: Record<string, number> = { ready_for_counterparty_review: 3, evidence_reviewed: 2, identity_confirmed: 1 };
+const covers = (c: TnDiscoverCard, district: string, state: string) => {
+  const a = c.service_area;
+  return a.kind === 'pan_india' || (a.kind === 'state' && a.states.includes(state)) || (a.kind === 'district' && a.districts.includes(district) && (!a.states.length || a.states.includes(state)));
+};
+const coversState = (c: TnDiscoverCard, state: string) => c.service_area.kind === 'pan_india' || c.service_area.states.includes(state);
+
+export function mockTnAreas(): TnAreas { return clone(DSC_AREAS); }
+
+export function mockTnDiscover(q: TnDiscoverQuery): TnDiscoverResponse {
+  tnMaybeFail();
+  const mode = mockMode();
+  const noBuyer = (mode === 'nobuyer' || mode === 'new' || mode === 'seller') && !tnState.businesses[SBX];
+  const district = q.district || (noBuyer ? '' : DSC_VIEWER.district); const state = q.state || (noBuyer ? '' : DSC_VIEWER.state);
+  const scope = noBuyer && (q.scope || 'district') === 'district' && !q.district ? 'india' : (q.scope || 'district');
+  let rows = mode === 'none' ? [] : dscCards.slice();
+  rows = rows.filter((c) => scope === 'india' || (scope === 'state' ? coversState(c, state) : covers(c, district, state)));
+  if (q.verified_only !== false) rows = rows.filter((c) => VERIFIED.has(c.trust.category));
+  if (q.category) rows = rows.filter((c) => c.categories.includes(q.category!));
+  if (q.q) { const t = q.q.toLowerCase(); rows = rows.filter((c) => c.display_name.toLowerCase().includes(t) || c.categories.some((x) => x.includes(t))); }
+  rows = rows.map((c) => ({ ...c, delivers_to_viewer: covers(c, DSC_VIEWER.district, DSC_VIEWER.state) }));
+  rows.sort((a, b) => Number(!!b.delivers_to_viewer) - Number(!!a.delivers_to_viewer) || (CAT_RANK[b.trust.category] || 0) - (CAT_RANK[a.trust.category] || 0)
+    || String(b.last_checked_at).localeCompare(String(a.last_checked_at)) || a.display_name.localeCompare(b.display_name));
+  if (noBuyer) rows = rows.map((c) => ({ ...c, connection: 'none' as const, rid: null }));
+  return { viewer: noBuyer ? null : DSC_VIEWER, viewer_needs_profile: noBuyer, scope, area: { district, state }, verified_only: q.verified_only !== false, results: clone(rows), next_cursor: null, sort_note: DSC_SORT, total: rows.length };
+}
+
+export function mockTnConnect(body: { from_bid: string; to_bid: string; categories: string[]; message?: string }): TnConnectResponse {
+  tnMaybeFail();
+  if (!body.from_bid) throw tnErr(403, 'buyer_profile_required', 'To request a connection, create your business profile or try a sample shop first.', { options: ['create_profile', 'sample_shop'] });
+  const c = dscCards.find((x) => x.bid === body.to_bid);
+  if (!c) throw tnErr(404, 'not_found', 'Supplier not found');
+  const rid = c.rid || `rel_dsc_${c.bid}`;
+  const duplicate = c.connection !== 'none';
+  if (!duplicate) { c.connection = 'requested'; c.rid = rid; }
+  const now = new Date().toISOString();
+  const rel = { rid, buyer_bid: body.from_bid, seller_bid: c.bid, initiated_by_bid: body.from_bid, state: 'requested' as const, categories: body.categories,
+    provenance: 'discovery_request' as const, seller_name: c.display_name, buyer_name: DSC_VIEWER.display_name,
+    request: { message: body.message || null, message_blocked: false, categories: body.categories, at: now }, history: [{ state: 'requested', at: now }], created_at: now };
+  return { relationship: rel, duplicate, guard: { blocked: false, categories: [] } };
+}
+
+const dscListings: Record<string, TnListing> = {
+  fx_annapurna: { listed: true, categories: ['staples', 'rice'], service_area: { kind: 'district', districts: ['HYDERABAD'], states: ['TELANGANA'], basis: 'self_declared' },
+    min_order_paise: 500000, notes: 'Sona masoori and basmati. Next-day delivery in Hyderabad.', updated_at: tnAgo(60 * 30) },
+};
+tnState.businesses.fx_annapurna.listing = dscListings.fx_annapurna;
+
+export function mockTnPutListing(bid: string, body: { version: number; listed: boolean; categories: string[]; service_area: Pick<TnServiceArea, 'kind' | 'districts' | 'states'>; min_order_paise?: number | null; notes?: string | null }): TnListingSaved {
+  tnMaybeFail();
+  const b = tnState.businesses[bid];
+  if (!b) throw tnErr(404, 'not_found', 'No business');
+  if (!b.roles.includes('seller')) throw tnErr(403, 'seller_role_required', 'Only supplier businesses can list themselves.');
+  if (body.service_area.kind === 'district' && !body.service_area.districts.length) throw tnErr(422, 'invalid_area', 'Pick at least one district you deliver to.', { invalid: [] });
+  if (body.service_area.kind === 'state' && !body.service_area.states.length) throw tnErr(422, 'invalid_area', 'Pick at least one state you deliver to.', { invalid: [] });
+  const listing: TnListing = { ...body, service_area: { ...body.service_area, basis: 'self_declared' }, updated_at: new Date().toISOString() };
+  b.listing = listing; b.version = (b.version || 1) + 1;
+  const card = dscCards.find((c) => c.bid === bid);
+  const preview = dCard({ ...(card || { bid, display_name: b.display_name }), bid, display_name: b.display_name, categories: listing.categories, service_area: listing.service_area,
+    min_order_paise: listing.min_order_paise ?? null, notes: listing.notes ?? null });
+  return { business: clone(b), card: preview };
+}
+
+// One incoming request for the seller view (?mock=seller).
+tnState.relationships.push({ rid: 'rel_dsc_ravi', buyer_bid: 'fx_ravi_kirana', seller_bid: 'fx_annapurna', initiated_by_bid: 'fx_ravi_kirana', state: 'requested',
+  categories: ['rice'], provenance: 'discovery_request', buyer_name: 'Ravi Kirana & General', seller_name: 'Annapurna Rice Traders',
+  request: { message: 'We buy about 20 bags of sona masoori a month. Can you deliver to Kukatpally?', message_blocked: false, categories: ['rice'], at: tnAgo(40) },
+  history: [{ state: 'requested', at: tnAgo(40) }], created_at: tnAgo(40) });

@@ -1,7 +1,7 @@
 import type { GateReport as GR, GateRuleResult } from '@/lib/types';
 import { normalizeGate } from '@/lib/api';
 import { maskVpasIn, reasonText } from '@/lib/format';
-import { Evidence, Icon, StatusPill } from './ui';
+import { Evidence, Icon } from './ui';
 
 /** Plain-language name of each deterministic check. Rule IDs live under technical evidence. */
 export const RULE_LABEL: Record<string, string> = {
@@ -40,11 +40,18 @@ export function GateReport({ report: raw, title = 'Safety checks' }: { report: G
       </ul>
     </div>
   ) : null;
+  const tone = failed.length ? 'bad' : approval.length ? 'warn' : 'ok';
   const parts = [passed.length ? `${passed.length} ${passed.length === 1 ? 'check' : 'checks'} passed` : null, approval.length ? `${approval.length} ${approval.length === 1 ? 'needs' : 'need'} your approval` : null, failed.length ? `${failed.length} failed` : null].filter(Boolean);
   return (
     <section className="stack sm" aria-label={title}>
       <div className="section-h" style={{ marginBottom: 0 }}><h2>{title}</h2></div>
-      <span className="row sm"><StatusPill tone={failed.length ? 'bad' : approval.length ? 'warn' : 'ok'}>{parts.join(' · ') || 'No checks reported'}</StatusPill></span>
+      <div className={`rf-checks ${tone}`}>
+        <span className="ico" aria-hidden><Icon name={failed.length ? 'shieldx' : 'shield'} size={18} /></span>
+        <div className="stack xs" style={{ gap: 0, minWidth: 0 }}>
+          <span className="strong">{failed.length ? 'A check failed' : res.length ? 'All required checks passed' : 'No checks reported'}</span>
+          {parts.length > 0 && <span className="small muted">{parts.join(' · ')}</span>}
+        </div>
+      </div>
       <Group items={failed} tone="bad" heading="Failed" />
       <Evidence label="See all checks">
         <Group items={approval} tone="warn" heading="Needs your approval" />

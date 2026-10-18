@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { getEvents, getMetrics, SHOP_ID, verifyChain } from '@/lib/api';
@@ -7,7 +8,8 @@ import { ist, maskVpasIn, reasonText, rupees, shortHash, supplierName, unmaskWit
 import { lastNegotiationId } from '@/lib/session';
 import { useAsync } from '@/lib/useAsync';
 import type { LedgerEvent, VerifyEvent } from '@/lib/types';
-import { Button, Callout, Card, ErrorState, Evidence, Icon, Skeleton, StatusPill, Timeline, type Step } from './ui';
+import { TrustIntro, TrustLinks } from './TrustIntro';
+import { Button, ButtonLink, Callout, Card, ErrorState, Evidence, Icon, Panel, Skeleton, Stat, StatusPill, Timeline, type Step } from './ui';
 
 export function TrustConsole({ negotiationId }: { negotiationId: string }) {
   const router = useRouter();
@@ -32,6 +34,8 @@ export function TrustConsole({ negotiationId }: { negotiationId: string }) {
 function PickNegotiation({ onPick }: { onPick: (v: string) => void }) {
   const [v, setV] = useState('');
   return (
+    <div className="stack lg">
+    <RecordIntro />
     <form className="card stack" onSubmit={(e) => { e.preventDefault(); if (v.trim()) onPick(v.trim()); }} aria-labelledby="pick-h">
       <div className="stack xs">
         <h2 id="pick-h">Which restock do you want to check?</h2>
@@ -41,6 +45,7 @@ function PickNegotiation({ onPick }: { onPick: (v: string) => void }) {
       <input id="nid" className="input mono" placeholder="neg_…" value={v} onChange={(e) => setV(e.target.value)} />
       <Button block type="submit" disabled={!v.trim()} icon="shield">Check this record</Button>
     </form>
+    </div>
   );
 }
 
@@ -61,11 +66,24 @@ function Console({ nid }: { nid: string }) {
   const byseq = useMemo(() => new Map((verify.data?.events || []).map((e) => [e.seq, e])), [verify.data]);
   const derived = useMemo(() => derive([...(events.data || [])].sort((a, b) => a.seq - b.seq)), [events.data]);
 
-  if ((verify.loading && !verify.data) || (events.loading && !events.data)) return <Skeleton lines={8} />;
+  if ((verify.loading && !verify.data) || (events.loading && !events.data)) return (
+    <div className="stack lg">
+      <RecordIntro />
+      <div className="tz-loading" aria-busy="true" aria-label="Loading the signed record"><Skeleton lines={2} /><div className="tiles">{[0, 1, 2, 3].map((i) => <div key={i} className="tile"><Skeleton lines={2} /></div>)}</div><Skeleton lines={5} /></div>
+    </div>
+  );
   if (events.error || !events.data) return (
-    <div className="stack">
-      <ErrorState error={events.error} onRetry={events.reload} title={`No record found for “${nid}”`} />
-      <a className="btn secondary block" href="/trust/latest">Check another restock</a>
+    <div className="stack lg">
+      <RecordIntro />
+      <ErrorState error={events.error} onRetry={events.reload} title={`Could not load the record for “${nid}”`} />
+      <div><Link className="btn secondary" href="/trust/latest">Check another restock</Link></div>
+    </div>
+  );
+  if (events.data.length === 0) return (
+    <div className="stack lg">
+      <RecordIntro />
+      <Callout tone="neutral" title="This record has no steps yet.">Steps appear as soon as you sign limits for a restock. Nothing has been signed under <span className="code">{nid}</span>.</Callout>
+      <div><ButtonLink href="/restock" icon="plus">Start a restock</ButtonLink></div>
     </div>
   );
 
@@ -116,10 +134,12 @@ function Console({ nid }: { nid: string }) {
 
   return (
     <div className="stack lg">
+      <RecordIntro />
       <Summary d={derived} />
 
-      <section className="stack xs" aria-live="polite" aria-label="Verification">
-        <div className={`ts-badge ${state}`}>
+      <section className="stack xs" aria-labelledby="ver-h">
+        <div className="section-h" style={{ marginBottom: 0 }}><h2 id="ver-h">Is this record intact?</h2></div>
+        <div className={`ts-badge ${state}`} aria-live="polite">
           <span className="ico"><Icon name={state === 'ok' ? 'shield' : state === 'bad' ? 'shieldx' : 'alert'} size={20} /></span>
           <span className="ts-badge-t grow">{badge}</span>
           {!tampered && !verify.error && !sigOk && <StatusPill tone="bad">{sigBad} invalid {sigBad === 1 ? 'signature' : 'signatures'}</StatusPill>}
@@ -127,6 +147,7 @@ function Console({ nid }: { nid: string }) {
           {tampered && <StatusPill tone="warn">Test copy in your browser</StatusPill>}
           {verify.error ? <Button size="sm" variant="secondary" icon="refresh" onClick={verify.reload}>Try again</Button> : null}
         </div>
+        <p className="xs muted">This badge reports the stored record. The test further down only ever changes a copy in your browser.</p>
         <Evidence label="How this was checked"><span>{title}.</span><span>{explain}</span>{!tampered && !verify.error && headOk == null && <span>No signed head on this record (older format), so missing events at the end cannot be ruled out.</span>}</Evidence>
       </section>
 
@@ -163,7 +184,21 @@ function Console({ nid }: { nid: string }) {
         </div>
       </Evidence>
       </section>
+      <TrustLinks current="record" nid={nid} />
     </div>
+  );
+}
+
+function RecordIntro() {
+  return (
+    <TrustIntro eyebrow="Trust · Signed record" title="What Sauda did for you"
+      lede="Every step Sauda took for this restock is written to a signed record: who it asked, what it blocked, what you approved. Use it to check that Sauda stayed inside your limits and that nobody changed the history afterwards."
+      guide={{
+        looking: 'A summary of one restock, the verification result for the stored record, the steps in order, and a test you can run on a copy.',
+        obtained: 'Each step was signed with a Cloud KMS key when it happened and linked to the step before it. When you open this page, Sauda’s server recomputes every fingerprint, link and signature.',
+        act: 'Approve or decline a waiting cart, compare a blocked supplier with the matching security test, or change one value in the test copy and watch verification fail.',
+        ignore: 'Nothing breaks. The record keeps itself; it is there for the day you or a supplier disagree about what happened.',
+      }} />
   );
 }
 
@@ -219,9 +254,9 @@ function TamperDemo({ events, tamperedSeq, onTamper, onReset }: {
   }
 
   return (
-    <Card title="Test: try to break the record"
-      subtitle="Change one value in a copy of this record, in this page only, and watch verification fail. The stored record is never touched."
-      action={tamperedSeq !== null ? <Button size="sm" variant="secondary" icon="refresh" onClick={onReset}>Reset</Button> : null}>
+    <Card title={<span className="row sm wrap"><span>Try to break the record</span><StatusPill tone="info">Test only</StatusPill></span>}
+      subtitle="Change one value in a copy of this record, in this page only, and watch verification fail. This is a walkthrough, not an incident; the stored record is never touched."
+      action={tamperedSeq !== null ? <Button size="sm" variant="secondary" icon="refresh" onClick={onReset}>Reset test</Button> : null}>
       <div className="stack">
         <label className="field">Event to change
           <select className="input" value={seq} onChange={(e) => setSeq(parseInt(e.target.value, 10))}>
@@ -381,7 +416,8 @@ interface Derived {
   asked: string[];
   rounds: { round: number; offers: number; blocked: number }[];
   allowed: string[];
-  blocked: { sid: string; clauses: string[] }[];
+  blocked: { sid: string; clauses: string[]; codes: string[] }[];
+  confirmationId: string | null;
   cartTotal: number | null;
   savings: number | null;
   approval: 'approved' | 'declined' | 'pending' | null;
@@ -401,6 +437,7 @@ function derive(evs: LedgerEvent[]): Derived {
   let approval: Derived['approval'] = null;
   const orders: Derived['orders'] = [];
   let payment: Derived['payment'] = null;
+  let confirmationId: string | null = null;
   let cur = 1;
   const R = (r: number) => { if (!roundMap.has(r)) roundMap.set(r, { offers: 0, blocked: new Set() }); return roundMap.get(r)!; };
   const block = (sid: string, codes: string[], round: number) => {
@@ -457,7 +494,7 @@ function derive(evs: LedgerEvent[]): Derived {
       }
       case 'counter.sent': case 'supplier.quarantined': case 'supplier.spoof_suspected': neg.push(e); break;
       case 'cart.assembled': cartTotal = num(p.total_paise); savings = num(p.savings_paise); neg.push(e); break;
-      case 'confirmation.requested': if (!approval) approval = 'pending'; if (cartTotal == null) cartTotal = num(p.total_paise); appr.push(e); break;
+      case 'confirmation.requested': if (typeof p.confirmation_id === 'string') confirmationId = p.confirmation_id; if (!approval) approval = 'pending'; if (cartTotal == null) cartTotal = num(p.total_paise); appr.push(e); break;
       case 'confirmation.approved': case 'owner.approved': approval = 'approved'; appr.push(e); break;
       case 'confirmation.declined': approval = 'declined'; appr.push(e); break;
       case 'confirmation.answered': approval = p.answer === 'approved' ? 'approved' : p.answer === 'declined' ? 'declined' : approval; appr.push(e); break;
@@ -474,7 +511,7 @@ function derive(evs: LedgerEvent[]): Derived {
   const blocked = [...blockedMap.entries()].map(([sid, codes]) => {
     const order = ['ADVANCE_TOO_HIGH', 'PAYEE_MISMATCH', 'GUARD_BLOCKED'];
     const sorted = [...codes].sort((a, b) => (order.indexOf(a) + 1 || 9) - (order.indexOf(b) + 1 || 9));
-    return { sid, clauses: sorted.map((c) => blockClause(c, advBy.get(sid) ?? null, maxAdv)) };
+    return { sid, codes: sorted, clauses: sorted.map((c) => blockClause(c, advBy.get(sid) ?? null, maxAdv)) };
   });
   const allowed = [...offeredBy].filter((s) => !blockedMap.has(s));
   const rounds = [...roundMap.entries()].sort((a, b) => a[0] - b[0]).map(([round, v]) => ({ round, offers: v.offers, blocked: v.blocked.size }));
@@ -507,36 +544,70 @@ function derive(evs: LedgerEvent[]): Derived {
     { key: 'appr', title: 'Your approval', events: appr, lines: apprLines, bad: approval === 'declined', pending: approval === 'pending' },
     { key: 'ord', title: 'Order & payment', events: ord, lines: ordLines, bad: payment === 'mismatch' || deniedActions.length > 0 },
   ];
-  return { asked, rounds, allowed, blocked, cartTotal, savings, approval, orders, payment, phases };
+  return { asked, rounds, allowed, blocked, cartTotal, savings, approval, orders, payment, phases, confirmationId };
 }
 
+/** Reason code -> the security test that exercises the same check (see /attack). */
+const TEST_FOR: Record<string, { id: string; title: string }> = {
+  GUARD_BLOCKED: { id: 'prompt_injection', title: 'Hidden instructions' },
+  GUARD_TIMEOUT: { id: 'guard_timeout', title: 'Screening timeout' },
+  ADVANCE_TOO_HIGH: { id: 'excessive_advance', title: '50% advance demand' },
+  PAYEE_MISMATCH: { id: 'payee_substitution', title: 'Changed bank account' },
+  SUPPLIER_UNKNOWN: { id: 'unknown_supplier', title: 'Unregistered supplier' },
+  OVER_BUDGET: { id: 'over_budget', title: 'Over budget' },
+};
+
 function Summary({ d }: { d: Derived }) {
-  const points: { tone: 'ok' | 'bad' | 'warn' | 'neutral'; text: string }[] = [];
+  const points: { tone: 'ok' | 'bad' | 'warn' | 'neutral'; text: string; links?: { href: string; label: string }[] }[] = [];
   if (d.asked.length) points.push({ tone: 'ok', text: `Asked ${plural(d.asked.length, 'supplier')} for quotes${d.rounds.length ? ` and negotiated over ${plural(d.rounds.length, 'round')}` : ''}.` });
   if (d.allowed.length || d.blocked.length) points.push({ tone: 'ok', text: `${plural(d.allowed.length, 'offer')} allowed${d.allowed.length ? ` (${listJoin(d.allowed.map((s) => supplierName(s)))})` : ''}, ${d.blocked.length} blocked.` });
-  for (const b of d.blocked) points.push({ tone: 'bad', text: `Blocked ${supplierName(b.sid)}: it ${listJoin(b.clauses)}.` });
-  if (d.cartTotal != null) points.push({ tone: 'ok', text: `Final cart ${rupees(d.cartTotal)}${d.savings != null && d.savings > 0 ? `, ${rupees(d.savings)} less than the opening quotes` : ''}.` });
+  for (const b of d.blocked) {
+    const tests = b.codes.map((c) => TEST_FOR[c.toUpperCase()]).filter(Boolean);
+    points.push({ tone: 'bad', text: `Blocked ${supplierName(b.sid)}: it ${listJoin(b.clauses)}.`, links: tests.map((t) => ({ href: `/attack#sc-${t.id}`, label: `Security test: ${t.title}` })) });
+  }
+  const ordered = d.orders.length > 0;
+  if (d.cartTotal != null) points.push({ tone: 'ok', text: `Final cart ${rupees(d.cartTotal)}${d.savings != null && d.savings > 0 ? `, ${rupees(d.savings)} less than the opening quotes${ordered ? '' : ' (projected until ordered)'}` : ''}.` });
   if (d.approval === 'approved') points.push({ tone: 'ok', text: 'You approved the cart before anything was ordered.' });
   else if (d.approval === 'declined') points.push({ tone: 'neutral', text: 'You declined the cart, so nothing was ordered.' });
   else if (d.approval === 'pending') points.push({ tone: 'warn', text: 'Waiting for your approval. Nothing is ordered until you say yes.' });
-  if (d.orders.length) points.push({ tone: 'ok', text: `${d.orders.length === 1 ? 'Order placed' : `${d.orders.length} orders placed`}${d.payment === 'claimed' ? '; you reported the payment' : d.payment === 'issued' ? '; payment link issued, not yet paid' : d.payment === 'mismatch' ? '; your payment report did not match' : ''}.` });
+  if (ordered) points.push({ tone: 'ok', text: `${d.orders.length === 1 ? 'Order placed' : `${d.orders.length} orders placed`}${d.payment === 'claimed' ? '; you reported the payment (not bank-verified)' : d.payment === 'issued' ? '; payment link issued, not yet paid' : d.payment === 'mismatch' ? '; your payment report did not match' : ''}.`, links: [{ href: '/orders', label: 'Open orders' }] });
   else if (d.approval === 'approved') points.push({ tone: 'neutral', text: 'No order placed yet.' });
 
-  const tiles: { label: string; value: string; sub?: string }[] = [];
-  if (d.asked.length) tiles.push({ label: 'Suppliers asked', value: String(d.asked.length), sub: d.rounds.length ? plural(d.rounds.length, 'round') : undefined });
+  const tiles: { label: string; value: string; sub?: string; href?: string }[] = [];
+  // Every figure carries its basis line.
+  if (d.asked.length) tiles.push({ label: 'Suppliers asked', value: String(d.asked.length), sub: d.rounds.length ? `over ${plural(d.rounds.length, 'round')}` : 'one round' });
   if (d.allowed.length || d.blocked.length) tiles.push({ label: 'Offers blocked', value: `${d.blocked.length}`, sub: `${d.allowed.length} allowed` });
-  if (d.cartTotal != null) tiles.push({ label: 'Final cart', value: rupees(d.cartTotal, true) });
-  if (d.savings != null && d.savings > 0) tiles.push({ label: 'Saved', value: rupees(d.savings, true), sub: 'vs opening quotes' });
+  if (d.cartTotal != null) tiles.push({ label: 'Final cart', value: rupees(d.cartTotal, true), sub: ordered ? 'ordered' : d.approval === 'pending' ? 'awaiting your approval' : 'not ordered' });
+  if (d.savings != null && d.savings > 0) tiles.push({ label: ordered ? 'Saved' : 'Projected saving', value: rupees(d.savings, true), sub: ordered ? 'vs opening quotes' : 'vs opening quotes, not ordered yet', href: `/savings/${encodeURIComponent(SHOP_ID)}` });
 
   return (
-    <section className="stack" aria-labelledby="ts-h">
-      <div className="ts-hero">
-        <h1 id="ts-h">What Sauda did for you</h1>
-      </div>
-      {tiles.length > 0 && <div className="tiles">{tiles.map((t) => <div key={t.label} className="tile"><span className="label">{t.label}</span><span className="value">{t.value}</span>{t.sub && <span className="sub">{t.sub}</span>}</div>)}</div>}
+    <section className="stack" aria-label="Summary of this restock">
+      {d.approval === 'pending' && (
+        <Panel tone="warn" className="tz-next" as="div">
+          <Icon name="clock" size={18} />
+          <div className="grow"><b>Your approval is needed.</b> Sauda has a cart ready; nothing is ordered or paid until you answer.</div>
+          {d.confirmationId ? <ButtonLink href={`/confirm/${encodeURIComponent(d.confirmationId)}`}>Review cart</ButtonLink> : null}
+        </Panel>
+      )}
+      {tiles.length > 0 && (
+        <div className="tiles">
+          {tiles.map((t) => {
+            const body = <Stat label={t.label} value={t.value} basis={t.sub} tone={t.href ? 'money' : undefined} />;
+            return t.href ? <Link key={t.label} href={t.href} className="tz-tile-link" aria-label={`${t.label}: ${t.value}, ${t.sub}. Open savings`}>{body}</Link> : <div key={t.label}>{body}</div>;
+          })}
+        </div>
+      )}
       {points.length > 0 && (
         <ul className="ts-points">
-          {points.map((p, i) => <li key={i}><span className={`dot ${p.tone}`} aria-hidden /><span>{p.text}</span></li>)}
+          {points.map((p, i) => (
+            <li key={i}>
+              <span className={`dot ${p.tone}`} aria-hidden />
+              <span className="stack xs" style={{ gap: 2 }}>
+                <span>{p.text}</span>
+                {p.links && p.links.length > 0 && <span className="tz-inline-links">{p.links.map((l) => <Link key={l.href} href={l.href}>{l.label}<Icon name="chev" size={12} /></Link>)}</span>}
+              </span>
+            </li>
+          ))}
         </ul>
       )}
     </section>

@@ -7,7 +7,7 @@ import { productNames } from '@/lib/session';
 import { useAsync } from '@/lib/useAsync';
 import type { MandateStatus } from '@/lib/types';
 import { Permissions } from './Permissions';
-import { Button, ButtonLink, Callout, Card, ErrorState, Evidence, Icon, Money, Skeleton, StatusPill, type Tone } from './ui';
+import { Button, ButtonLink, Callout, Card, ErrorState, Evidence, Icon, Money, StatusPill, type Tone } from './ui';
 import { Sheet } from './ui-client';
 
 const STATUS: Record<MandateStatus, { tone: Tone; label: string }> = {
@@ -27,7 +27,12 @@ export function MandateCard({ id, justSigned, sid }: { id: string; justSigned?: 
   const [names, setNames] = useState<Record<string, string>>({});
   useEffect(() => { setNames(productNames()); }, []);
 
-  if (loading && !m) return <Skeleton lines={6} />;
+  if (loading && !m) return (
+    <div className="rf-skel" aria-busy="true" aria-label="Loading your limits">
+      <div className="stack sm"><div className="skeleton rf-sm" /><div className="skeleton rf-hero" /><div className="skeleton rf-sm" /></div>
+      <div className="rf-skel-rows">{[70, 58, 64, 50, 66].map((w) => <div key={w} className="rf-skel-row"><div className="skeleton" style={{ width: `${w}%` }} /><div className="skeleton" /></div>)}</div>
+    </div>
+  );
   if (error || !m) return <ErrorState error={error} onRetry={reload} title="Could not load these limits" />;
 
   const b = m.body as Record<string, unknown>;
@@ -52,10 +57,10 @@ export function MandateCard({ id, justSigned, sid }: { id: string; justSigned?: 
       {m.status === 'revoked' && <Callout tone="bad" title="Switched off.">Every action under these limits is now refused. Nothing more can be ordered with them.</Callout>}
       {m.status === 'expired' && <Callout tone="warn" title="Expired.">Start a new restock to sign fresh limits.</Callout>}
 
-      <div className="stack xs">
-        <span className="small muted">Budget</span>
+      <div className="rf-hero">
+        <span className="label">Budget</span>
         <span className="hero-num"><Money paise={Number(b.budget_paise || 0)} whole /></span>
-        <span className="small muted row sm wrap" style={{ rowGap: 0 }}><StatusPill tone={st.tone}>{st.label}</StatusPill><span>expires {ist(m.expires_at || (b.expires_at as string))}</span></span>
+        <span className="meta"><StatusPill tone={st.tone}>{st.label}</StatusPill><span>{m.status === 'expired' ? 'expired' : 'expires'} {ist(m.expires_at || (b.expires_at as string))}</span></span>
       </div>
       <Card>
         <Permissions m={{
@@ -73,8 +78,8 @@ export function MandateCard({ id, justSigned, sid }: { id: string; justSigned?: 
         <div className="stack">
           <ButtonLink href={`/restock?run=${encodeURIComponent(m.mandate_id)}${sid ? `&sid=${encodeURIComponent(sid)}` : ''}`} block>Start negotiating</ButtonLink>
           <div className="row between wrap sm">
-            {sid ? <Link className="linkbtn muted" style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center' }} href={`/restock/${encodeURIComponent(sid)}`}>Back to this restock</Link> : <span />}
-            <button type="button" className="linkbtn muted" style={{ minHeight: 44 }} onClick={() => setArming(true)}>Switch off these limits</button>
+            {sid ? <Link className="linkbtn muted rf-tap" href={`/restock/${encodeURIComponent(sid)}`}>Back to this restock</Link> : <span />}
+            <button type="button" className="linkbtn muted rf-tap" style={{ color: 'var(--bad)' }} onClick={() => setArming(true)}>Switch off these limits</button>
           </div>
           <Sheet open={arming} onClose={() => !busy && setArming(false)} title="Switch off these limits?">
             <p className="muted">Any running negotiation stops, and nothing can be ordered under them. This cannot be undone.</p>

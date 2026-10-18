@@ -2,13 +2,15 @@
 // Continuous voice for a restock session. Listen once; every finished sentence is sent as its own turn
 // (no transcript confirmation step). Web Speech where available, MediaRecorder + VAD segments otherwise.
 // Voice has no authority: signing and approval stay on their own screens.
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { InfoTip } from '../ui-client';
 import {
-  RecorderListener, VOICE_LANGS, WebSpeechListener, recorderSupported, speechCtor,
-  type FinalMeta, type ListenState, type Listener, type VoiceErrorKind, type VoiceLangHint,
+  RecorderListener, WebSpeechListener, recorderSupported, speechCtor,
+  type FinalMeta, type ListenState, type Listener, type VoiceErrorKind,
 } from '@/lib/voice';
+import { langInfo, loadLang, saveLang, type LangCode } from '@/lib/languages';
+import { LangSelect } from './LangSelect';
 import s from './VoiceCapture.module.css';
 
 export interface VoiceControlProps {
@@ -18,15 +20,16 @@ export interface VoiceControlProps {
   onTypeInstead?: () => void;
   /** Composer slots: the mic renders inline; live status goes to `top`, language + info to `foot`. */
   slots?: { top: HTMLElement | null; foot: HTMLElement | null };
+  /** Controlled language (the parent shows its own menu); otherwise this control shows one and remembers it. */
+  lang?: LangCode;
 }
-
-const LANG_KEY = 'sauda.voice.lang';
 
 type Err = { kind: VoiceErrorKind; message: string; kept?: string };
 
-export function VoiceControl({ onFinal, disabled, onTypeInstead, slots }: VoiceControlProps) {
-  const uid = useId();
-  const [lang, setLang] = useState<VoiceLangHint>('en-IN');
+export function VoiceControl({ onFinal, disabled, onTypeInstead, slots, lang: langProp }: VoiceControlProps) {
+  const [ownLang, setLang] = useState<LangCode>('en');
+  const lang = langProp ?? ownLang;
+  const info = langInfo(lang);
   const [state, setState] = useState<ListenState>('off');
   const [partial, setPartial] = useState('');
   const [err, setErr] = useState<Err | null>(null);
@@ -39,7 +42,7 @@ export function VoiceControl({ onFinal, disabled, onTypeInstead, slots }: VoiceC
   finalRef.current = onFinal;
 
   useEffect(() => {
-    try { const v = localStorage.getItem(LANG_KEY) as VoiceLangHint | null; if (v && VOICE_LANGS.some((l) => l.value === v)) setLang(v); } catch { /* ignore */ }
+    setLang(loadLang());
     setEngine(speechCtor() ? 'webspeech' : recorderSupported() ? 'recorder' : 'none');
   }, []);
 
@@ -66,23 +69,25 @@ export function VoiceControl({ onFinal, disabled, onTypeInstead, slots }: VoiceC
       onLevel: setLevel,
       onBusy: setBusy,
     };
-    const l: Listener = useEngine === 'webspeech' ? new WebSpeechListener(lang, cb) : new RecorderListener(lang, cb);
+    // Web Speech gets the browser locale (Bhojpuri listens as hi-IN); recorder segments carry the lang_hint.
+    const l: Listener = useEngine === 'webspeech' ? new WebSpeechListener(info.speech, cb) : new RecorderListener(info.hint, cb);
     lis.current = l;
     void l.start();
-  }, [disabled, lang, useEngine]);
+  }, [disabled, info.speech, info.hint, useEngine]);
 
   const pause = () => { lis.current?.pause(); lis.current = null; };
   const on = state === 'listening' || state === 'starting';
 
-  const pickLang = (v: VoiceLangHint) => {
+  const pickLang = (v: LangCode) => {
     setLang(v);
-    try { localStorage.setItem(LANG_KEY, v); } catch { /* ignore */ }
+    saveLang(v);
     if (on) { lis.current?.stop(); lis.current = null; setState('off'); }
   };
 
   const note = useEngine === 'webspeech'
     ? "Your browser's speech service (Google in Chrome) processes the audio; Sauda gets the text."
     : 'Spoken parts go to Sauda for transcription; audio is not stored.';
+  const langNote = info.beta ? ` ${info.english} is in beta: it listens as Hindi, so check the text.` : '';
   const portal = (el: HTMLElement | null | undefined, node: ReactNode) => (el ? createPortal(node, el) : slots ? null : node);
 
   if (engine === 'none') {
@@ -96,16 +101,16 @@ export function VoiceControl({ onFinal, disabled, onTypeInstead, slots }: VoiceC
         {state === 'listening' ? 'Listening. Microphone is on.' : state === 'paused' ? 'Paused. Microphone is off.' : state === 'starting' ? 'Starting the microphone…' : ''}
       </div>
       {on && (
-        <div className="live-line">
-          <span className="live-dot" aria-hidden />
-          <span className="wave" aria-hidden>{bars.map((k, i) => <i key={i} style={{ height: `${Math.max(3, Math.round(16 * Math.min(1, level * 1.6) * k))}px` }} />)}</span>
-          <span className="grow ellipsis" aria-live="off" lang={lang.slice(0, 2)}>
-            {state === 'starting' ? <span className="muted">Starting…</span> : partial ? <>“{partial}”</> : <span className="muted">Listening… each sentence is added as you finish it</span>}
+        <div className="rf-live">
+          {state === 'starting' ? <span className="spinner" aria-hidden style={{ color: 'var(--ink-2)' }} /> : <span className="live-dot" aria-hidden />}
+          {state !== 'starting' && <span className="wave" aria-hidden>{bars.map((k, i) => <i key={i} style={{ height: `${Math.max(3, Math.round(16 * Math.min(1, level * 1.6) * k))}px` }} />)}</span>}
+          <span className="rf-partial clamp2" aria-live="off" lang={lang} dir={info.rtl ? 'rtl' : undefined}>
+            {state === 'starting' ? <span className="muted">Starting the microphone…</span> : partial ? <>“{partial.length > 110 ? `…${partial.slice(-110)}` : partial}”</> : <span className="muted">Listening. Each sentence is added when you finish it.</span>}
           </span>
-          <button type="button" className="linkbtn muted" onClick={pause}>Pause</button>
+          <button type="button" className="rf-pause" onClick={pause}>Pause</button>
         </div>
       )}
-      {busy > 0 && <span className="xs muted row sm"><span className="spinner" aria-hidden /> Transcribing{busy > 1 ? ` ${busy} parts` : ''}…</span>}
+      {busy > 0 && <span className="rf-proc" role="status"><span className="spinner" aria-hidden />Working out what you said{busy > 1 ? ` (${busy} parts)` : ''}…</span>}
       {err && <VoiceError err={err} canFallback={useEngine === 'webspeech' && recorderSupported()}
         onRetry={start}
         onFallback={() => { setForceRecorder(true); setErr(null); }}
@@ -125,15 +130,8 @@ export function VoiceControl({ onFinal, disabled, onTypeInstead, slots }: VoiceC
   );
   const foot = (
     <span className="row sm" style={{ gap: 2 }}>
-      <span className={s.srOnly} id={`${uid}-lang`}>Language you will speak</span>
-      <span className="seg" role="group" aria-labelledby={`${uid}-lang`}>
-        {VOICE_LANGS.map((l) => (
-          <button key={l.value} type="button" aria-pressed={lang === l.value} lang={l.short} title={l.value === 'en-IN' ? 'English (India)' : l.label} onClick={() => pickLang(l.value)}>
-            {l.value === 'en-IN' ? 'EN' : l.value === 'hi-IN' ? 'हि' : 'తె'}
-          </button>
-        ))}
-      </span>
-      <InfoTip label="About voice" align="left">{note} Stops after 2 min of silence.</InfoTip>
+      {langProp === undefined && <LangSelect value={lang} onChange={pickLang} />}
+      <InfoTip label="About voice" align="left">{note}{langNote} Stops after 2 min of silence.</InfoTip>
     </span>
   );
   if (!slots) return <div className="stack sm">{top}<div className="row sm">{micBtn}{foot}</div></div>;

@@ -375,7 +375,10 @@ _SCALES = {"hundred": 100, "thousand": 1000, "lakh": 100000, "lakhs": 100000}
 
 def words_to_digits(text: str) -> str:
     """'twenty-four packets' -> '24 packets', 'eight thousand rupees' -> '8000 rupees'. Also '1-litre' -> '1 litre'
-    and 'kilogram' -> 'kg' so the shared demand parser sees pack sizes."""
+    and 'kilogram' -> 'kg' so the shared demand parser sees pack sizes. Indic digits (১০, ௧௦) become 0-9."""
+    from ..languages import ascii_digits
+
+    text = ascii_digits(text or "")
     text = re.sub(r"\b([A-Za-z]+)-(kilograms?|kilos?|kgs?|litres?|liters?|ltrs?|grams?|gms?|ml)\b", r"\1 \2", text or "", flags=re.I)
     text = re.sub(r"\b(that|this|the|which|first|second|third|last|other|same|any|no)\s+one\b", lambda m: m.group(1) + " \x00one", text or "", flags=re.I)
     toks = re.findall(r"\x00?[A-Za-z]+(?:-[A-Za-z]+)*|\d[\d,]*(?:\.\d+)?|[^\sA-Za-z\d\x00]+|\s+", text)
@@ -609,7 +612,9 @@ class TurnExtract(BaseModel):
 
 
 TURN_PROMPT = """You update a kirana shop owner's restock draft from ONE new utterance (voice or typed; English,
-Hinglish or Hindi in Latin script; number words possible). Return the intent and the ops it implies.
+Hinglish, or any Indian language in its own script or in Latin script: Hindi, Telugu, Tamil, Kannada, Malayalam,
+Marathi, Bengali, Gujarati, Punjabi, Odia, Urdu, Bhojpuri; number words in any of them possible; brand names often
+in Latin script). Return the intent and the ops it implies. Any question you write is in the owner's language.
 
 Ops:
 - add_line: a product to add. gtin from CATALOG; qty = packs the owner said ("2 dozen" = 24; a pack size like
@@ -736,29 +741,34 @@ def answer(kind: str | None, d: dict) -> str:
     return f"Current total: up to {_rupees(est)} at your price limits for {_n_items(len(lines))}.{tail}"
 
 
-def build_reply(applied: list[dict], d: dict, clar: dict | None, unmatched: list[str]) -> str:
+def build_reply(applied: list[dict], d: dict, clar: dict | None, unmatched: list[str], lang: str | None = None) -> str:
+    from ..reply_i18n import t as _t
+    L = _t(lang)
+    def J(xs: list[str]) -> str:
+        return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + L["and"] + xs[-1]
     parts = []
     adds = [a for a in applied if a["op"] == "add_line"]
     if adds:
-        parts.append("Added " + _join([f"{a['qty']} {a['name']}" + (" (default qty, edit it)" if a.get("qty_source") == "inferred" else "")
-                                       for a in adds]))
+        parts.append(L["added"].format(items=J([f"{a['qty']} {a['name']}" + (" " + L["dq"] if a.get("qty_source") == "inferred" else "")
+                                                for a in adds])))
     for a in applied:
         if a["op"] == "set_qty":
-            parts.append(f"{a['name']} now {a['qty']}")
+            parts.append(L["set"].format(name=a["name"], qty=a["qty"]))
         elif a["op"] == "remove":
-            parts.append(f"Removed {a['name']}")
+            parts.append(L["remove"].format(name=a["name"]))
         elif a["op"] == "confirm_line":
-            parts.append(f"Keeping {a['name']}")
+            parts.append(L["keep"].format(name=a["name"]))
         elif a["op"] == "replace_product":
-            parts.append(f"Switched to {a['name']}")
+            parts.append(L["switch"].format(name=a["name"]))
         elif a["op"] == "set_budget":
-            parts.append(f"Budget set to {_rupees(a['paise'])}")
+            parts.append(L["budget"].format(amt=_rupees(a["paise"])))
     out = "; ".join(parts)
     if applied:
         est = int(d.get("budget_estimate_paise") or 0)
-        out += f". Total up to {_rupees(est)} for {_n_items(len(d.get('lines') or []))}."
+        n = len(d.get("lines") or [])
+        out += ". " + L["total"].format(amt=_rupees(est), n=n, items_word=L["item"] if n == 1 else L["items"]) + "."
     if unmatched:
-        out += f" I could not match: {_join(unmatched[:3])}."
+        out += " " + L["nomatch"].format(items=J(unmatched[:3])) + "."
     if clar:
         out += (" " if out else "") + clar["question"]
     return out.strip() or "I didn't catch an item or a change. Try e.g. \"add 10 atta\" or \"remove the salt\"."
@@ -856,7 +866,7 @@ def turn(sid: str, uid: str, client_turn_id: str, text: str, source: str, lang: 
         elif reply_override:
             reply = reply_override[1]
         else:
-            reply = build_reply(applied, d, clar, unmatched)
+            reply = build_reply(applied, d, clar, unmatched, lang)
         t2 = _now_ms()
         latency = {"extract": round(t1 - tl), "apply": round(t2 - t1), "total": round(t2 - t0), "load": round(tl - t0)}
         ts = store.iso()
