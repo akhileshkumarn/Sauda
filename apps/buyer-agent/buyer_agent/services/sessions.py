@@ -375,7 +375,10 @@ _SCALES = {"hundred": 100, "thousand": 1000, "lakh": 100000, "lakhs": 100000}
 
 def words_to_digits(text: str) -> str:
     """'twenty-four packets' -> '24 packets', 'eight thousand rupees' -> '8000 rupees'. Also '1-litre' -> '1 litre'
-    and 'kilogram' -> 'kg' so the shared demand parser sees pack sizes."""
+    and 'kilogram' -> 'kg' so the shared demand parser sees pack sizes. Indic digits (১০, ௧௦) become 0-9."""
+    from ..languages import ascii_digits
+
+    text = ascii_digits(text or "")
     text = re.sub(r"\b([A-Za-z]+)-(kilograms?|kilos?|kgs?|litres?|liters?|ltrs?|grams?|gms?|ml)\b", r"\1 \2", text or "", flags=re.I)
     text = re.sub(r"\b(that|this|the|which|first|second|third|last|other|same|any|no)\s+one\b", lambda m: m.group(1) + " \x00one", text or "", flags=re.I)
     toks = re.findall(r"\x00?[A-Za-z]+(?:-[A-Za-z]+)*|\d[\d,]*(?:\.\d+)?|[^\sA-Za-z\d\x00]+|\s+", text)
@@ -609,7 +612,9 @@ class TurnExtract(BaseModel):
 
 
 TURN_PROMPT = """You update a kirana shop owner's restock draft from ONE new utterance (voice or typed; English,
-Hinglish or Hindi in Latin script; number words possible). Return the intent and the ops it implies.
+Hinglish, or any Indian language in its own script or in Latin script: Hindi, Telugu, Tamil, Kannada, Malayalam,
+Marathi, Bengali, Gujarati, Punjabi, Odia, Urdu, Bhojpuri; number words in any of them possible; brand names often
+in Latin script). Return the intent and the ops it implies. Any question you write is in the owner's language.
 
 Ops:
 - add_line: a product to add. gtin from CATALOG; qty = packs the owner said ("2 dozen" = 24; a pack size like

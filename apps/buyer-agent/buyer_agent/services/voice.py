@@ -25,8 +25,11 @@ MAX_TRANSCRIPT_CHARS = 2000
 # no duration (MediaRecorder WebM). 10% slack for rounding.
 AUDIO_TOKENS_PER_S = 25
 
-LANG_HINTS = {"en-IN": "English (India)", "hi-IN": "Hindi", "te-IN": "Telugu"}
-LANG_NAMES = {"en": "English", "hi": "Hindi", "te": "Telugu"}
+from ..languages import LANGS, LOCALE_HINTS, ascii_digits, script_rules
+
+LANG_HINTS = dict(LOCALE_HINTS)  # browser locale -> language name (en-IN, hi-IN, te-IN, ta-IN, kn-IN, ...)
+LANG_NAMES = {k: v[0] for k, v in LANGS.items()}
+_CODES = ", ".join(LANG_NAMES)
 
 # declared content types we accept -> canonical container
 _DECLARED = {
@@ -262,8 +265,8 @@ def validate_audio(data: bytes, declared_type: str | None) -> AudioInfo:
 class Transcription(BaseModel):
     speech_detected: bool = Field(description="false if the audio has no intelligible human speech")
     transcript: str = Field(description="verbatim transcript, empty if no speech")
-    language: str = Field(description="dominant language: en, hi, te or other")
-    languages_present: list[str] = Field(default_factory=list, description="every language heard: en, hi, te, other")
+    language: str = Field(description="dominant language code: " + _CODES + " or other")
+    languages_present: list[str] = Field(default_factory=list, description="every language code heard: " + _CODES + ", other")
     unclear: list[str] = Field(default_factory=list, description="words or phrases you were not sure about, as heard")
 
 
@@ -278,14 +281,17 @@ Rules:
   shopping list, never fill gaps. Every word you write must be audible in the recording.
 - Write exactly what was said, in the order it was said, with normal punctuation at pauses. Do not summarise,
   translate, correct, reorder or add items.
-- Keep brand and product names as spoken, in their usual Latin spelling.
-- Write every quantity, pack size, price and amount as digits with its unit as spoken (for example "10 packets",
+- Keep brand and product names as spoken, in their usual Latin spelling, even inside
+  a sentence in an Indian language.
+- Write every quantity, pack size, price and amount as Western digits 0-9 (never the script's own digits) with
+  its unit as spoken (for example "10 packets",
   "1 kg", "500 g", "1 litre", "8,000 rupees"). Never change a number.
-- Hindi: write in Devanagari. Telugu: write in Telugu script. English: Latin script. When the speaker mixes
-  languages (code-switching), write each part in its own script; English words spoken inside Hindi or Telugu
+- Write each Indian language in its own script ({scripts}); English in Latin script. Bhojpuri (bho) is written
+  in Devanagari; report it as bho only if it is clearly Bhojpuri rather than Hindi. When the speaker mixes
+  languages (code-switching), write each part in its own script; English words spoken inside an Indian language
   (brand names, "packet", "kg", "litre") stay in Latin script.
 - Put words you could not hear clearly into `unclear` exactly as you heard them.
-- language: the dominant language code (en, hi, te or other). languages_present: every language code heard.
+- language: the dominant language code ({codes} or other). languages_present: every language code heard.
 {hint}"""
 
 
@@ -310,7 +316,7 @@ def transcribe(audio: bytes, mime: str, lang_hint: str | None) -> tuple[Transcri
     )
     contents = [types.Content(role="user", parts=[
         types.Part.from_bytes(data=audio, mime_type=mime),
-        types.Part.from_text(text=TRANSCRIBE_PROMPT.format(hint=hint)),
+        types.Part.from_text(text=TRANSCRIBE_PROMPT.format(hint=hint, scripts=script_rules(), codes=_CODES)),
     ])]
     resp = deps.genai_client().models.generate_content(model=deps.settings().gemini_model, contents=contents, config=cfg)
     usage = {"audio_tokens": None}
@@ -323,7 +329,8 @@ def transcribe(audio: bytes, mime: str, lang_hint: str | None) -> tuple[Transcri
 
 
 def _norm_lang(code: str | None) -> str:
-    c = (code or "").strip().lower()[:2]
+    c = (code or "").strip().lower().replace("_", "-")
+    c = "bho" if c.startswith("bho") else c.split("-")[0][:2]
     return c if c in LANG_NAMES else "other"
 
 
@@ -369,7 +376,7 @@ def parse_voice(audio: bytes, declared_type: str | None, lang_hint: str | None, 
     at = usage.get("audio_tokens")
     if info.duration_s is None and isinstance(at, int) and at > AUDIO_TOKENS_PER_S * MAX_SECONDS * 1.1:
         raise VoiceError(413, "AUDIO_TOO_LONG", "Recording segment is longer than 30 seconds. Pause briefly between sentences.")
-    transcript = " ".join((tr.transcript or "").split())[:MAX_TRANSCRIPT_CHARS]
+    transcript = ascii_digits(" ".join((tr.transcript or "").split()))[:MAX_TRANSCRIPT_CHARS]
     if not tr.speech_detected or not transcript:
         raise VoiceError(422, "AUDIO_SILENT", "No speech was detected. Check the microphone and speak a little louder.")
 
@@ -379,7 +386,7 @@ def parse_voice(audio: bytes, declared_type: str | None, lang_hint: str | None, 
     if len([p for p in present if p != "other"]) > 1:
         notes.append("Mixed languages detected (" + ", ".join(LANG_NAMES.get(p, p) for p in present if p in LANG_NAMES) + ").")
     if language == "other":
-        notes.append("Language not recognised as English, Hindi or Telugu; please check the transcript.")
+        notes.append("Language not recognised as one of the supported languages; please check the transcript.")
     if tr.unclear:
         notes.append("Some words were unclear: " + ", ".join(w.strip()[:40] for w in tr.unclear[:5] if w.strip()) + ".")
 

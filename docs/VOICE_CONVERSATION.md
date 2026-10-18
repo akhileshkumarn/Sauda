@@ -28,7 +28,8 @@ written by the backend agent. Contract: CONTRACT2 (restock sessions, turns, tele
 - `lib/voice.ts` holds two listeners behind one interface (`start / pause / stop`). Only one can be active in the
   whole app (`claim()` stops the previous one).
   - `WebSpeechListener` (Chrome, Edge, Android Chrome) uses `continuous = true` and `interimResults = true`, with
-    `lang` set to en-IN, hi-IN or te-IN. Interim text is shown live. Each `isFinal` result is emitted at once as one
+    `lang` set from the language menu (en-IN, hi-IN, te-IN, ta-IN, kn-IN, ml-IN, mr-IN, bn-IN, gu-IN, pa-IN,
+    or-IN, ur-IN; Bhojpuri listens as hi-IN). Interim text is shown live. Each `isFinal` result is emitted at once as one
     utterance.
   - `RecorderListener` is the fallback: `getUserMedia`, then a WebAudio RMS VAD with an adaptive noise floor sampled
     every 50 ms. A segment ends after 900 ms of silence or 25 s. A new `MediaRecorder` starts per segment, so each
@@ -73,12 +74,69 @@ written by the backend agent. Contract: CONTRACT2 (restock sessions, turns, tele
 
 ## Languages
 
-- The picker offers English (India) `en-IN`, हिन्दी `hi-IN` and తెలుగు `te-IN`. The choice is remembered on the
-  device.
+Supported: English, हिन्दी, తెలుగు, தமிழ், ಕನ್ನಡ, മലയാളം, मराठी, বাংলা, ગુજરાતી, ਪੰਜਾਬੀ, ଓଡ଼ିଆ, اردو, and
+भोजपुरी (beta, listens as Hindi).
+
+- One table for both voice screens: `apps/owner-app/lib/languages.ts` (frontend) and
+  `apps/buyer-agent/buyer_agent/languages.py` (backend). The menu (`components/voice/LangSelect.tsx`) is a compact
+  native `<select>` with native names, used in voice restock and voice onboarding. The choice is remembered on the
+  device (`localStorage["sauda.voice.lang"]`, which now holds the code, e.g. `ta`; old locale values such as `hi-IN`
+  are still read).
+- Web Speech gets the browser locale (`ta-IN` and so on). The recorder fallback sends `lang_hint` with each segment;
+  `POST /voice/parse` accepts every locale above plus `bho-IN`. Unknown hints are ignored, not rejected.
+- Onboarding (`POST /tn/onboarding {lang}`, and `lang` on each turn) accepts a code or a locale (`ta`, `ta-IN`,
+  `bho`); anything unknown becomes `en`. The opening question, every field question, the read-back frame, the
+  skip / missed / Aadhaar / screening notes and the PIN / GSTIN / FSSAI / Udyam problem texts exist for every
+  language (`onboarding_i18n.py`, merged into the tables in `onboarding_agent.py`; a missing string falls back to
+  English). Yes / no words for the consent and confirm steps were added for each language; anything else goes to
+  Gemini.
+- Indic digits (১০, ௨௦, ੧੨, ۱۲, …) are normalised to 0-9 in transcripts and before the restock fast path and the
+  onboarding PIN / GSTIN checks. No new number words were added to the fast path: number words in the new
+  languages are left to Gemini, which handled all of them in the tests below.
+- Not translated yet (same as for Hindi and Telugu before this change): the restock turn reply ("Added 10 …",
+  "Salt LITE now 25") is built in code in English, and the onboarding acknowledgement fragments and read-back
+  values ("sole proprietorship", "not GST registered", "buying rice, edible oil") are English inside a sentence in
+  the owner's language. Clarification questions written by Gemini are asked to be in the owner's language.
 - If the browser reports `language-not-supported`, the panel offers "Use recorder mode", which uses the Gemini
   transcription route instead.
-- Honest status: Hindi and Telugu were not tested end to end with real speech in this pass. Only English text
-  turns and an English recorder segment were measured.
+
+### Verification (18 Oct 2026, local backend :8131, real Vertex Gemini, shop `dev`)
+
+Sentence: "10 packets of Aashirvaad atta, 20 Tata salt, 12 one-litre sunflower oil", written in each language and
+script with brand names in Latin. Expected lines: Aashirvaad Superior MP Atta x10, Salt LITE (TATA) x20, Refined
+Sunflower Oil 1 L x12. Restock also had a second turn "make salt 25" in the language (expected Salt LITE 25, the
+rest unchanged). Onboarding: buyer, typed answers in the language for name + proprietorship, not GST registered,
+PIN, street, "I am Ravi, the owner", "rice, oil, snacks", skip FSSAI, consent yes; expected every question in the
+language and the read-back with the right fields. Audio: macOS `say` voices converted to 16 kHz mono WAV with
+`afconvert`, sent to `POST /voice/parse`.
+
+| Language | Browser STT locale | Gemini audio transcription | Restock text parse | Onboarding conversation | Status |
+|---|---|---|---|---|---|
+| English | en-IN, configured | Pass (Rishi) | Pass | Pass (existing) | Supported |
+| Hindi | hi-IN, configured | Pass (Lekha): digits, brands kept | Pass | Pass (existing) | Supported |
+| Telugu | te-IN, configured | Pass (Geeta): digits kept; "Tata" written in Telugu script | Pass | Pass (existing) | Supported |
+| Tamil | ta-IN, configured, needs a real mic test | Pass (Vani, 2 runs): digits, Aashirvaad, Tata kept | Pass, edit pass | Pass, 8 turns | Supported |
+| Kannada | kn-IN, configured, needs a real mic test | Pass (Soumya, 2 runs): digits, brands kept | Pass, edit pass | Pass, 8 turns | Supported |
+| Malayalam | ml-IN, configured, needs a real mic test | Not tested (no test voice) | Pass, edit pass | Pass, 8 turns | Supported (typed verified) |
+| Marathi | mr-IN, configured, needs a real mic test | Not tested (no test voice) | Pass, edit pass | Pass, 8 turns | Supported (typed verified) |
+| Bengali | bn-IN, configured, needs a real mic test | Pass with caveats (Piya, 6 runs, 4 fully right): numbers right; brands written in Bengali script; "এক লিটার" heard as "ঐকো লিটার" (flagged unclear) with the synthetic voice; one run invented "Saffola" and the oil line dropped (that prompt wording was reverted); one run returned no preview lines (Vertex 429s were occurring then; not confirmed as the cause) | Pass, edit pass (Bengali digits) | Pass, 8 turns | Supported; check the transcript |
+| Gujarati | gu-IN, configured, needs a real mic test | Not tested (no test voice) | Pass, edit pass | Pass, 8 turns | Supported (typed verified) |
+| Punjabi (Gurmukhi) | pa-IN, configured, needs a real mic test | Not tested (no test voice) | Pass, edit pass | Pass, 8 turns | Supported (typed verified) |
+| Odia | or-IN, configured, needs a real mic test | Not tested (no test voice) | Pass, edit pass | Pass, 8 turns | Supported (typed verified) |
+| Urdu | ur-IN, configured, needs a real mic test | Not tested (no test voice) | Pass, edit pass | Pass, 8 turns (questions right to left) | Supported (typed verified) |
+| Bhojpuri | none in Chrome; listens as hi-IN | Pass with caveat (Lekha, a Hindi voice reading Bhojpuri; hints hi-IN and bho-IN): numbers and brands right, language detected as bho, but the transcript drifts to Hindi ("नून" -> "नमक", "चाहीं" -> "चाहिए") | Pass, edit pass ("नून 25 गो कर दीं") | Pass, 8 turns (Bhojpuri questions) | Beta (understood via Hindi recognition) |
+
+Honest notes:
+
+- **Browser recognition for every new language needs a real microphone test.** Chrome's Web Speech service lists
+  these locales, but it cannot be exercised headless; only the configuration is verified.
+- Malayalam, Marathi, Gujarati, Punjabi, Odia and Urdu have no macOS test voice on this machine, so Gemini audio
+  transcription is untested for them; typed restock and onboarding passed.
+- All audio tests used synthetic voices, not a real shopkeeper in a noisy shop.
+- Bhojpuri: no browser locale exists. Recognition is Hindi's, so a real speaker's Bhojpuri words may come back as
+  Hindi; the meaning (items and numbers) survived in the tests. The menu labels it "beta, listens as Hindi".
+- Some calls hit Vertex `429 RESOURCE_EXHAUSTED` during the runs (shared project quota) and were retried; the user
+  sees "Could not transcribe the recording right now" in that case.
 
 ## Failure recovery
 

@@ -7,7 +7,7 @@ import { acceptInvitation, getInvitation, myBusinesses, rememberBid } from '@/li
 import { useAsync } from '@/lib/useAsync';
 import type { TnInvitationPublic, TnRelationship } from '@/lib/types';
 import { Button, ButtonLink, Callout, EmptyState, ErrorState, Icon, Skeleton } from '../ui';
-import { BrandMark } from '../BrandMark';
+import { Wordmark } from '../BrandMark';
 import './network.css';
 
 export function InviteLanding({ token }: { token: string }) {
@@ -40,7 +40,7 @@ function Body({ inv, token }: { inv: TnInvitationPublic; token: string }) {
   return (
     <>
       <div className="tn-hero" style={{ paddingTop: 8 }}>
-        <BrandMark size={40} />
+        <Wordmark height={30} />
         <h1>{inv.from_display_name} invited you to trade on Sauda</h1>
         <p className="muted">They would like to add you as a {as}. Verify your business once; both of you then decide whether to trade. Nothing is ordered or paid through this link.</p>
       </div>

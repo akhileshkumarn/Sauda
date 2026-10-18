@@ -690,6 +690,7 @@ th:last-child, td:last-child { padding-right: 0; }
 .profile-email { font-size: 13px; color: var(--ink-2); }
 .profile-item { text-align: left; border: 0; background: transparent; color: var(--ink); font: inherit; padding: 10px; border-radius: 8px; cursor: pointer; }
 .profile-item:hover { background: var(--fill); }
+.wordmark-svg { display: block; flex: none; color: var(--ink); overflow: visible; }
 .brand-svg { display: block; border-radius: 8px; flex: none; }
 :root[data-theme='dark'] .brand-svg { --brand-tile: #eeebe3; --brand-ink: #12110f; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .brand-svg { --brand-tile: #eeebe3; --brand-ink: #12110f; } }
@@ -1416,3 +1417,9 @@ a.rowlink:focus-visible { border-radius: var(--r-sm); }
   .sb-shop:hover { border-color: var(--line-2); }
   .sb-shop-go { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-2); display: inline-flex; }
 }
+
+/* Compact language menu (voice restock, voice onboarding): native names, remembers the choice. */
+.lang-select { appearance: none; -webkit-appearance: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--ink); background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 9px center; border: 0; border-radius: var(--r-pill); min-height: 28px; max-width: 11rem; padding: 0 26px 0 11px; cursor: pointer; }
+.lang-select:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 2px; }
+.rf-dock .cfoot .lang-select { min-height: 36px; }
+@media (pointer: coarse) { .lang-select { min-height: 40px; font-size: 16px; } }

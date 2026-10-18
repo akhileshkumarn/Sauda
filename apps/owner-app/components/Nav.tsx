@@ -6,7 +6,7 @@ import { DEFAULT_NEGOTIATION_ID, MOCK, SHOP_ID } from '@/lib/api';
 import { lastNegotiationId } from '@/lib/session';
 import { Icon } from './ui';
 import { ProfileMenu } from './ProfileMenu';
-import { BrandMark } from './BrandMark';
+import { Wordmark } from './BrandMark';
 import { useReviewerMode } from '@/lib/network';
 
 type Item = { href: string; label: string; match: (p: string) => boolean };
@@ -57,8 +57,7 @@ export function Nav() {
       {/* desktop sidebar */}
       <aside className="sidebar" aria-label="Sauda">
         <Link href="/dashboard" className="brand sb-brand" aria-label="Sauda home">
-          <BrandMark size={30} />
-          <span className="wordmark">SAUDA</span>
+          <Wordmark height={22} />
         </Link>
         <Link href="/network" className="sb-shop" title="Business profile and verification">
           <span className="sb-shop-k">Shop</span>
@@ -97,8 +96,7 @@ export function Nav() {
       <header className="topbar">
         <div className="topbar-in">
           <Link href="/dashboard" className="brand" aria-label="Sauda home">
-            <BrandMark size={28} />
-            <span className="wordmark">SAUDA</span>
+            <Wordmark height={20} />
           </Link>
           <span className="spacer" />
           {MOCK && <span className="mock-tag" title="NEXT_PUBLIC_MOCK=1: sample data, no backend"><span className="dot warn" aria-hidden />Sample data</span>}

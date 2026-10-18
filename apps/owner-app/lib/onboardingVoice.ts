@@ -6,7 +6,9 @@ import { getIdToken } from './auth';
 import { createBusiness, gstinCheck, pinCheck, runVerification } from './network';
 import type { TnRole } from './types';
 
-export type OnbLang = 'en' | 'hi' | 'te';
+import type { LangCode } from './languages';
+
+export type OnbLang = LangCode;
 export type OnbStatus = 'collecting' | 'confirming' | 'created' | 'cancelled';
 
 export interface OnbDraft {
@@ -82,7 +84,7 @@ export function carryToForm(s: OnbSession) { try { sessionStorage.setItem('sauda
 // ---------------------------------------------------------------- mock (deterministic, format checks only)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const store: Record<string, OnbSession & { skipped: string[] }> = {};
-const QS: Record<string, Record<OnbLang, string>> = {
+const QS: Record<string, Partial<Record<OnbLang, string>>> = {
   opening: { en: 'Tell me about your shop: its name, where it is, and what you sell.', hi: 'अपनी दुकान के बारे में बताइए: नाम, कहाँ है, और क्या बेचते हैं।', te: 'మీ షాప్ గురించి చెప్పండి: పేరు, ఎక్కడ ఉంది, ఏమి అమ్ముతారు.' },
   display_name: { en: "What's the name on your shop board?", hi: 'आपकी दुकान के बोर्ड पर क्या नाम है?', te: 'మీ షాప్ బోర్డు మీద పేరు ఏమిటి?' },
   constitution: { en: 'Is it a sole proprietorship, a partnership, an LLP or a company?', hi: 'यह प्रोपराइटरशिप है, पार्टनरशिप, LLP या कंपनी?', te: 'ఇది ప్రొప్రైటర్‌షిప్, పార్ట్‌నర్‌షిప్, LLP లేదా కంపెనీనా?' },
@@ -120,7 +122,7 @@ function mockStart(role: TnRole, lang: OnbLang) {
   const oid = `onb_${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`;
   const draft: OnbDraft = { roles: [role], display_name: '', legal_name: null, constitution: null, category: null, products: [], gst_registered: null, gstin: null, udyam: null, fssai: null, cin_llpin: null,
     address: { line: '', city: '', state: '', pin: '' }, representative: { name: '', role: '' }, phone: null, email: null, brand_claims: [], service_area: null, consents: null };
-  const q = QS.opening[lang];
+  const q = QS.opening[lang] || QS.opening.en || '';
   const s = { oid, role, status: 'collecting' as OnbStatus, version: 1, draft, missing: [], asked: null, question: q, checks: {}, turns: [{ role: 'sauda' as const, text: q }], lang, skipped: [] };
   store[oid] = s; s.missing = mockMissing(s) as never;
   return sleep(250).then(() => ({ session: structuredClone(s), reply: q }));

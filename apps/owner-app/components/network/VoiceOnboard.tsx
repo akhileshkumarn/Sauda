@@ -13,13 +13,9 @@ import {
 import type { TnRole } from '@/lib/types';
 import { Button, Callout, Icon } from '../ui';
 import { VoiceControl } from '../voice';
+import { LangSelect } from '../voice/LangSelect';
+import { langInfo, loadLang, saveLang } from '@/lib/languages';
 
-const LANGS: { v: OnbLang; label: string; title: string; speech: 'en-IN' | 'hi-IN' | 'te-IN' }[] = [
-  { v: 'en', label: 'EN', title: 'English', speech: 'en-IN' },
-  { v: 'hi', label: 'हि', title: 'हिन्दी', speech: 'hi-IN' },
-  { v: 'te', label: 'తె', title: 'తెలుగు', speech: 'te-IN' },
-];
-const VOICE_LANG_KEY = 'sauda.voice.lang';
 
 type FieldKey = 'display_name' | 'constitution' | 'gstin' | 'address_line' | 'city' | 'pin' | 'rep_name' | 'rep_role' | 'products' | 'fssai' | 'service_area' | 'brand_claims';
 
@@ -52,7 +48,7 @@ export function VoiceOnboard() {
   const logEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try { const v = localStorage.getItem(VOICE_LANG_KEY); const m = LANGS.find((l) => l.speech === v); if (m) setLang(m.v); } catch { /* ignore */ }
+    setLang(loadLang());
   }, []);
 
   const begin = useCallback(async (lg: OnbLang) => {
@@ -75,7 +71,7 @@ export function VoiceOnboard() {
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = LANGS.find((l) => l.v === lang)?.speech || 'en-IN';
+      u.lang = lang === 'bho' ? 'hi-IN' : langInfo(lang).speech;
       u.rate = 1;
       u.onstart = () => setSpeaking(true);
       u.onend = () => setSpeaking(false);
@@ -108,7 +104,9 @@ export function VoiceOnboard() {
 
   function pickLang(v: OnbLang) {
     setLang(v);
-    try { localStorage.setItem(VOICE_LANG_KEY, LANGS.find((l) => l.v === v)!.speech); } catch { /* ignore */ }
+    saveLang(v);
+    // Nothing answered yet: restart so the opening question is in the new language. Later answers carry `lang`.
+    if (!busy && !(sRef.current?.turns || []).some((t) => t.role === 'owner')) void begin(v);
   }
 
   function toForm() {
@@ -168,19 +166,17 @@ export function VoiceOnboard() {
           <div className="vo-top row between wrap">
             <span className="small muted">{role === 'seller' ? 'Set up your supplier profile by voice' : 'Set up your shop by voice'}</span>
             <div className="row sm">
-              <span className="seg" role="group" aria-label="Language">
-                {LANGS.map((l) => <button key={l.v} type="button" lang={l.v} title={l.title} aria-pressed={lang === l.v} onClick={() => pickLang(l.v)}>{l.label}</button>)}
-              </span>
+              <LangSelect value={lang} onChange={pickLang} label="Language" />
               <label className="vo-speak small"><input type="checkbox" checked={speak} onChange={(e) => { setSpeak(e.target.checked); if (!e.target.checked) try { window.speechSynthesis?.cancel(); } catch { /* ignore */ } }} /> Read questions aloud</label>
             </div>
           </div>
 
-          <h1 id="vo-q" className="vo-q" aria-live="polite" lang={lang}>{s ? question : <span className="muted">Starting…</span>}</h1>
+          <h1 id="vo-q" className="vo-q" aria-live="polite" lang={lang} dir={langInfo(lang).rtl ? 'rtl' : undefined}>{s ? question : <span className="muted">Starting…</span>}</h1>
           {lastLatency !== null && <p className="xs muted" aria-hidden>Answered in {(lastLatency / 1000).toFixed(1)} s</p>}
 
           {!confirming && s?.status !== 'created' && (
             <div className="vo-mic" key={lang}>
-              <VoiceControl onFinal={onFinal} disabled={!s || creating} onTypeInstead={() => inputRef.current?.focus()} />
+              <VoiceControl lang={lang} onFinal={onFinal} disabled={!s || creating} onTypeInstead={() => inputRef.current?.focus()} />
               {speaking && <p className="small muted">Sauda is speaking; the microphone ignores this.</p>}
             </div>
           )}
@@ -251,10 +247,15 @@ export function VoiceOnboard() {
   );
 }
 
-const CONFIRM_HEAD: Record<OnbLang, string> = { en: 'Here is your profile. Shall I create it?', hi: 'यह आपकी प्रोफ़ाइल है। क्या मैं इसे बना दूँ?', te: 'ఇది మీ ప్రొఫైల్. సృష్టించమంటారా?' };
+const CONFIRM_HEAD: Partial<Record<OnbLang, string>> = {
+  en: 'Here is your profile. Shall I create it?', hi: 'यह आपकी प्रोफ़ाइल है। क्या मैं इसे बना दूँ?', te: 'ఇది మీ ప్రొఫైల్. సృష్టించమంటారా?',
+  ta: 'உங்க ப்ரொஃபைல்-ஐ கிரியேட் பண்ணட்டுமா?', kn: 'ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಕ್ರಿಯೇಟ್ ಮಾಡಲಾ?', ml: 'നിങ്ങളുടെ പ്രൊഫൈൽ ഉണ്ടാക്കട്ടെ?',
+  mr: 'मी तुमची प्रोफाइल तयार करू का?', bn: 'আমি কি আপনার প্রোফাইল তৈরি করব?', gu: 'તો હું તમારી પ્રોફાઇલ બનાવી દઉં?',
+  pa: 'ਕੀ ਮੈਂ ਤੁਹਾਡਾ ਪ੍ਰੋਫਾਈਲ ਬਣਾ ਦੇਵਾਂ?', or: 'ମୁଁ ଆପଣଙ୍କ ପ୍ରୋଫାଇଲ୍ ତିଆରି କରିବି କି?', ur: 'کیا میں آپ کی پروفائل بنا دوں؟', bho: 'का हम रउआ प्रोफाइल बना दीं?',
+};
 /** The large heading shows only Sauda's current question; the full reply stays in the conversation log. */
 function headline(s: OnbSession, reply: string) {
-  if (s.status === 'confirming') return CONFIRM_HEAD[s.lang] || CONFIRM_HEAD.en;
+  if (s.status === 'confirming') return CONFIRM_HEAD[s.lang] || CONFIRM_HEAD.en || '';
   return s.question || reply;
 }
 

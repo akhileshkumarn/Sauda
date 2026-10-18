@@ -29,7 +29,9 @@ from sauda_verify import store as tn
 from sauda_verify.providers import gstin as gstin_mod
 from sauda_verify.providers import pincode
 
+from . import languages
 from .deps import gemini_json
+from .onboarding_i18n import TEXTS as _I18N
 
 log = logging.getLogger("buyer_agent.onboarding")
 
@@ -64,7 +66,7 @@ REP_ROLES = {"proprietor": "Proprietor", "owner": "Proprietor", "malik": "Propri
              "manager": "Manager", "employee": "Employee authorised to act", "staff": "Employee authorised to act"}
 
 AADHAAR_RE = re.compile(r"(?<!\d)\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?!\d)")
-AADHAAR_WORD = re.compile(r"aadh?aa?r|adhar|आधार|ఆధార్", re.I)
+AADHAAR_WORD = re.compile(r"aadh?aa?r|adhar|आधार|ఆధార్|ஆதார்|ಆಧಾರ್|ആധാർ|আধার|આધાર|ਆਧਾਰ|ଆଧାର|آدھار|آدھار", re.I)
 GSTIN_TOKEN = re.compile(r"\b(\d{2}\s?[A-Z]{5}\s?\d{4}\s?[A-Z][0-9A-Z]\s?Z\s?[0-9A-Z])\b", re.I)
 GSTIN_LOOSE = re.compile(r"\b([0-9]{2}[0-9A-Z]{13})\b", re.I)
 PIN_RE = re.compile(r"(?<!\d)([1-9]\d{2})\s?(\d{3})(?!\d)")
@@ -74,8 +76,10 @@ UDYAM_RE = re.compile(r"UDYAM[\s\-]?([A-Z]{2})[\s\-]?(\d{2})[\s\-]?(\d{7})", re.
 FSSAI_RE = re.compile(r"(?<!\d)([12]\d{13})(?!\d)")
 
 YES = re.compile(r"^(?:yes|yeah|yep|yup|ya|sure|ok(?:ay)?|correct|right|go ahead|please do|haan?|haa+n?|ji|ji haan|han ji|theek hai|thik hai|"
-                 r"avunu|avnu|sare|haan ji|हाँ|हां|जी|जी हाँ|ठीक है|అవును|సరే)(?=$|[\s,.!?])", re.I)
-NO = re.compile(r"^(?:no|nope|nah|not really|nahi|nahin|nai|na|ledu|kaadu|vaddu|नहीं|नही|ना|లేదు|వద్దు|కాదు)(?=$|[\s,.!?])", re.I)
+                 r"avunu|avnu|sare|haan ji|हाँ|हां|जी|जी हाँ|ठीक है|అవును|సరే|"
+                 r"ஆமா|ஆமாம்|சரி|ಹೌದು|ಸರಿ|അതെ|ശരി|होय|हो|হ্যাঁ|হাঁ|ঠিক আছে|હા|હાં|ਹਾਂ|ਹਾਂ ਜੀ|ହଁ|ହଁ|ہاں|جی|جی ہاں|ٹھیک ہے|हँ|हं)(?=$|[\s,.!?।،])", re.I)
+NO = re.compile(r"^(?:no|nope|nah|not really|nahi|nahin|nai|na|ledu|kaadu|vaddu|नहीं|नही|ना|లేదు|వద్దు|కాదు|"
+                r"இல்லை|வேண்டாம்|ಇಲ್ಲ|ಬೇಡ|ഇല്ല|വേണ്ട|नाही|नको|না|નહીં|ના|ਨਹੀਂ|ਨਾ|ନା|ନାହିଁ|نہیں|نا|नाहीं)(?=$|[\s,.!?।،])", re.I)
 SKIP = re.compile(r"\b(?:skip|later|not now|none|nothing|don'?t have|do not have|no (?:number|licence|license|brands?)|"
                   r"not registered|unregistered|chhodo|chhod do|baad mein|nahi hai|ledu|vadileyandi|vaddu)\b|छोड़|छोड़|बाद में|नहीं है|तर्वात|తర్వాత|వదిలే|వద్దు|లేదు", re.I)
 NOT_REGISTERED = re.compile(r"\b(?:not (?:gst )?registered|unregistered|no gst|gst nahi|gst ledu|below (?:the )?threshold|"
@@ -103,8 +107,8 @@ def _lock(oid: str) -> threading.Lock:
 
 # ---------------------------------------------------------------- language
 def lang_of(lang: str | None) -> str:
-    l = (lang or "en").lower()[:2]
-    return l if l in ("en", "hi", "te") else "en"
+    """Any supported code or locale ("ta", "ta-IN", "bho") -> its code; unknown -> "en"."""
+    return languages.norm_code(lang)
 
 
 Q = {
@@ -165,6 +169,55 @@ BLOCKED_MSG = {"en": "I can only take details about your business here, so I've 
                "te": "ఇక్కడ మీ వ్యాపార వివరాలు మాత్రమే తీసుకుంటాను, కాబట్టి దాన్ని వదిలేశాను."}
 SKIPPED = {"en": "No problem, skipped.", "hi": "ठीक है, छोड़ दिया।", "te": "సరే, వదిలేశాను."}
 MISSED = {"en": "Sorry, I didn't catch that. ", "hi": "माफ़ कीजिए, समझ नहीं पाया। ", "te": "క్షమించండి, అర్థం కాలేదు. "}
+MSG = {
+    "cancel_note": {"en": "You can stop any time; nothing is created until you confirm.",
+                    "hi": "आप कभी भी रुक सकते हैं; आपकी पुष्टि के बिना कुछ नहीं बनता।",
+                    "te": "ఎప్పుడైనా ఆపవచ్చు; మీ నిర్ధారణ లేకుండా ఏదీ సృష్టించబడదు."},
+    "city_confirm": {"en": "PIN {pin} is in {district}, {state}, but you said {city}. Is the city {district}?",
+                     "hi": "पिन {pin} {district}, {state} में है, पर आपने {city} कहा। क्या शहर {district} है?",
+                     "te": "పిన్ {pin} {district}, {state} లో ఉంది, కానీ మీరు {city} అన్నారు. నగరం {district} నా?"},
+    "gstin_invalid": {"en": "That GSTIN doesn't look right ({why}). Could you read it again?",
+                      "hi": "यह GSTIN सही नहीं लग रहा ({why})। क्या फिर से बताएँगे?",
+                      "te": "ఆ GSTIN సరిగా లేదు ({why}). మళ్ళీ చెబుతారా?"},
+    "gstin_state": {"en": "Note: the GSTIN is registered in {st}, which differs from your address.",
+                    "hi": "ध्यान दें: GSTIN {st} का है, जो आपके पते से अलग है।",
+                    "te": "గమనిక: GSTIN {st} లో ఉంది, మీ చిరునామాకు భిన్నం."},
+    "pin_unknown": {"en": "I couldn't find PIN {pin} in the India Post directory.", "hi": "पिन {pin} इंडिया पोस्ट सूची में नहीं मिला।",
+                    "te": "పిన్ {pin} ఇండియా పోస్ట్ జాబితాలో దొరకలేదు."},
+    "pin_invalid": {"en": "A PIN code has 6 digits.", "hi": "पिन कोड में 6 अंक होते हैं।", "te": "పిన్ కోడ్‌లో 6 అంకెలు ఉంటాయి."},
+    "udyam_invalid": {"en": "A Udyam number looks like UDYAM-TS-02-0012345.", "hi": "उद्यम नंबर UDYAM-TS-02-0012345 जैसा होता है।",
+                      "te": "ఉద్యమ్ నంబర్ UDYAM-TS-02-0012345 లా ఉంటుంది."},
+    "fssai_invalid": {"en": "An FSSAI number has 14 digits.", "hi": "FSSAI नंबर में 14 अंक होते हैं।", "te": "FSSAI నంబర్‌లో 14 అంకెలు ఉంటాయి."},
+}
+
+
+class _Lang(dict):
+    """A per-language string table that falls back to English for a language without that string."""
+
+    def __missing__(self, key):
+        return self["en"]
+
+
+def _merge_i18n() -> dict:
+    """Fold onboarding_i18n.TEXTS (ta, kn, ml, mr, bn, gu, pa, or, ur, bho) into the tables above."""
+    tops = {"CONFIRM_Q": CONFIRM_Q, "HAVE": HAVE, "GOT": GOT, "AADHAAR_MSG": AADHAAR_MSG, "BLOCKED_MSG": BLOCKED_MSG,
+            "SKIPPED": SKIPPED, "MISSED": MISSED, **MSG}
+    for code, texts in _I18N.items():
+        for k, v in texts.items():
+            if k in tops:
+                tops[k][code] = v
+                continue
+            key, _, role = k.partition(".")
+            if key in Q:
+                (Q[key][role] if role else Q[key])[code] = v
+    for name, table in list(tops.items()):
+        tops[name] = _Lang(table)
+    return tops
+
+
+_t = _merge_i18n()
+CONFIRM_Q, HAVE, GOT, AADHAAR_MSG, BLOCKED_MSG, SKIPPED, MISSED = (_t[k] for k in ("CONFIRM_Q", "HAVE", "GOT", "AADHAAR_MSG", "BLOCKED_MSG", "SKIPPED", "MISSED"))
+MSG = {k: _t[k] for k in MSG}
 
 
 def _q(key: str, role: str, lang: str) -> str:
@@ -247,9 +300,8 @@ REQUIRED_FOR_CREATE = {"display_name", "constitution", "gst_registered", "gstin"
 
 def question_for(key: str, role: str, lang: str, pending: dict | None) -> str:
     if key == "city_confirm" and pending:
-        return {"en": f"PIN {pending['pin']} is in {pending['district']}, {pending['state']}, but you said {pending['city']}. Is the city {pending['district']}?",
-                "hi": f"पिन {pending['pin']} {pending['district']}, {pending['state']} में है, पर आपने {pending['city']} कहा। क्या शहर {pending['district']} है?",
-                "te": f"పిన్ {pending['pin']} {pending['district']}, {pending['state']} లో ఉంది, కానీ మీరు {pending['city']} అన్నారు. నగరం {pending['district']} నా?"}[lang]
+        return MSG["city_confirm"][lang].format(pin=pending["pin"], district=pending["district"], state=pending["state"],
+                                                city=pending["city"])
     return _q(key, role, lang)
 
 
@@ -602,7 +654,8 @@ class OnboardExtract(BaseModel):
 
 
 PROMPT = """You help a small Indian business owner fill a business profile by talking. From ONE new utterance (voice
-or typed; English, Hindi, Telugu or a mix, any script), extract field updates. Return only what the owner actually
+or typed; English or any Indian language: Hindi, Telugu, Tamil, Kannada, Malayalam, Marathi, Bengali, Gujarati,
+Punjabi, Odia, Urdu, Bhojpuri, or a mix, any script), extract field updates. Return only what the owner actually
 said in THIS utterance. Never guess, complete or invent a value. Copy names, numbers and places from the words.
 
 Fields:
@@ -749,25 +802,19 @@ def _problem_text(p: str, lang: str) -> str:
         return AADHAAR_MSG[lang]
     if p.startswith("gstin_invalid:"):
         why = p.split(":", 1)[1]
-        return {"en": f"That GSTIN doesn't look right ({why}). Could you read it again?",
-                "hi": f"यह GSTIN सही नहीं लग रहा ({why})। क्या फिर से बताएँगे?",
-                "te": f"ఆ GSTIN సరిగా లేదు ({why}). మళ్ళీ చెబుతారా?"}[lang]
+        return MSG["gstin_invalid"][lang].format(why=why)
     if p.startswith("gstin_state:"):
         st = p.split(":", 1)[1]
-        return {"en": f"Note: the GSTIN is registered in {st}, which differs from your address.",
-                "hi": f"ध्यान दें: GSTIN {st} का है, जो आपके पते से अलग है।",
-                "te": f"గమనిక: GSTIN {st} లో ఉంది, మీ చిరునామాకు భిన్నం."}[lang]
+        return MSG["gstin_state"][lang].format(st=st)
     if p.startswith("pin_unknown:"):
         pin = p.split(":", 1)[1]
-        return {"en": f"I couldn't find PIN {pin} in the India Post directory.", "hi": f"पिन {pin} इंडिया पोस्ट सूची में नहीं मिला।",
-                "te": f"పిన్ {pin} ఇండియా పోస్ట్ జాబితాలో దొరకలేదు."}[lang]
+        return MSG["pin_unknown"][lang].format(pin=pin)
     if p == "pin_invalid":
-        return {"en": "A PIN code has 6 digits.", "hi": "पिन कोड में 6 अंक होते हैं।", "te": "పిన్ కోడ్‌లో 6 అంకెలు ఉంటాయి."}[lang]
+        return MSG["pin_invalid"][lang]
     if p == "udyam_invalid":
-        return {"en": "A Udyam number looks like UDYAM-TS-02-0012345.", "hi": "उद्यम नंबर UDYAM-TS-02-0012345 जैसा होता है।",
-                "te": "ఉద్యమ్ నంబర్ UDYAM-TS-02-0012345 లా ఉంటుంది."}[lang]
+        return MSG["udyam_invalid"][lang]
     if p == "fssai_invalid":
-        return {"en": "An FSSAI number has 14 digits.", "hi": "FSSAI नंबर में 14 अंक होते हैं।", "te": "FSSAI నంబర్‌లో 14 అంకెలు ఉంటాయి."}[lang]
+        return MSG["fssai_invalid"][lang]
     return ""
 
 
@@ -854,9 +901,7 @@ def turn(oid: str, uid: str, client_turn_id: str, text: str, source: str, lang: 
                             applied.append(Applied(field="consent", value=ex.consent,
                                                    shown="checks agreed" if yes else "no lookups, profile kept private"))
                         if ex.intent == "cancel" and not ex.updates:
-                            notes.append({"en": "You can stop any time; nothing is created until you confirm.",
-                                          "hi": "आप कभी भी रुक सकते हैं; आपकी पुष्टि के बिना कुछ नहीं बनता।",
-                                          "te": "ఎప్పుడైనా ఆపవచ్చు; మీ నిర్ధారణ లేకుండా ఏదీ సృష్టించబడదు."}[lg])
+                            notes.append(MSG["cancel_note"][lg])
                     except Exception as e:  # noqa: BLE001
                         log.warning("onboarding extraction failed (%s); deterministic fallback", type(e).__name__)
                         updates = fallback_extract(text, asked)
@@ -915,7 +960,7 @@ def edit(oid: str, uid: str, version: int, updates: dict, skip: list[str] | None
             raise OnboardingError(409, "version_conflict", "This setup changed on another device; reload it.", session=public(s))
         if s["status"] in ("created", "cancelled"):
             raise OnboardingError(409, "session_closed", "This setup is finished.", session=public(s))
-        lg = s.get("lang") or "en"
+        lg = lang_of(s.get("lang"))
         consents = updates.pop("consents", None)
         d, applied, problems, pending = apply_updates(s["draft"], s["role"], updates, "", trusted=True)
         if any(p == "aadhaar" for p in problems):

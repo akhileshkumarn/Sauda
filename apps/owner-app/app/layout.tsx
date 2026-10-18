@@ -11,7 +11,7 @@ const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-display', disp
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://saudaai.web.app';
 const OG_TITLE = 'Sauda — restock within your limits';
-const OG_DESC = 'Talk your restock in English, Hindi or Telugu. Sauda negotiates with registered suppliers inside limits you sign, and buys nothing until you approve.';
+const OG_DESC = 'Talk your restock in English, Hindi, Telugu, Tamil and other Indian languages. Sauda negotiates with registered suppliers inside limits you sign, and buys nothing until you approve.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

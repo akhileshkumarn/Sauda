@@ -5,10 +5,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { AUTH_MODE, onUser, signInWithGoogle } from '@/lib/auth';
 import { MOCK } from '@/lib/api';
 import { Button, Callout, Icon, Skeleton, type IconName } from './ui';
-import { BrandMark } from './BrandMark';
+import { Wordmark } from './BrandMark';
 
 const POINTS: { icon: IconName; title: string; body: string }[] = [
-  { icon: 'mic', title: 'Talk your restock', body: 'Say or type what you need in English, Hindi or Telugu. Sauda turns it into a draft you can edit.' },
+  { icon: 'mic', title: 'Talk your restock', body: 'Say or type what you need in English, Hindi, Telugu, Tamil and other Indian languages. Sauda turns it into a draft you can edit.' },
   { icon: 'lock', title: 'Negotiates inside limits you sign', body: 'Only with registered suppliers, and never above the budget and prices you set.' },
   { icon: 'shield', title: 'Nothing is bought until you approve', body: 'Every step lands on a signed record that anyone can verify.' },
 ];
@@ -66,7 +66,7 @@ function SignedOut({ busy, err, onSignIn }: { busy: boolean; err: string | null;
     <div className="intro-wrap">
       <section className="intro" aria-labelledby="intro-h">
         <div className="intro-copy">
-          <BrandMark size={40} />
+          <Wordmark height={30} />
           <div className="intro-head">
             <h1 id="intro-h">Restock within your limits</h1>
             <p className="intro-lede">Sauda drafts your shop’s restock, bargains with suppliers for you, and orders only when you say yes.</p>

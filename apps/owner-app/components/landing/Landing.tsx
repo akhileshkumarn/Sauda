@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AUTH_MODE, onUser, signInWithGoogle } from '@/lib/auth';
 import { MOCK } from '@/lib/api';
-import { BrandMark } from '../BrandMark';
+import { Wordmark } from '../BrandMark';
 import { Callout, Icon, type IconName } from '../ui';
 import './landing.css';
 
@@ -50,8 +50,7 @@ export function Landing() {
       <header className="ld-top">
         <div className="ld-top-in">
           <Link href="/" className="brand ld-brand" aria-label="Sauda, product home">
-            <BrandMark size={30} />
-            <span className="wordmark">SAUDA</span>
+            <Wordmark height={22} />
           </Link>
           <nav className="ld-nav" aria-label="Sections">
             <ul>{NAV.map((n) => <li key={n.href}><a href={n.href}>{n.label}</a></li>)}</ul>
@@ -85,7 +84,7 @@ function Hero({ signedIn, busy, err, onStart }: { signedIn: boolean; busy: boole
       <div className="ld-hero-copy">
         <h1 id="ld-h1">Restock within your limits</h1>
         <p className="ld-lede">
-          Tell Sauda what your kirana needs, by voice, in English, Hindi or Telugu. It finds verified
+          Tell Sauda what your kirana needs, by voice, in English, Hindi, Telugu, Tamil and other Indian languages. It finds verified
           suppliers, negotiates inside the spending limits you sign, blocks any supplier that tries a
           trick, and buys nothing until you approve. Every step lands on a signed record anyone can check.
         </p>
@@ -344,7 +343,7 @@ function Footer() {
     <footer className="ld-foot">
       <div className="ld-wrap ld-foot-in">
         <div className="ld-foot-brand">
-          <span className="brand"><BrandMark size={26} /><span className="wordmark">SAUDA</span></span>
+          <span className="brand"><Wordmark height={20} /></span>
           <p>Built by team Inertia for the Google Cloud AI Builder Cup 2026.</p>
         </div>
         <ul className="ld-foot-links">
