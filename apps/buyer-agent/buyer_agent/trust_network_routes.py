@@ -411,6 +411,10 @@ EVIDENCE_PROVIDERS = {"documents", "photo"}
 REGISTRY_LIKE = {SourceKind.official_registry, SourceKind.authorised_provider}
 
 
+# Real checks of the declared data itself (the PIN directory, Google geocoding, GSTIN format) keep their true source
+# label even on demo businesses: the declared values are demo data, but the check against them is real.
+REAL_DATA_CHECKS = {"pincode_directory", "geocode", "gstin_format"}
+
 def _check_doc(bid: str, case_id: str, *, dim: Dim | str, check_type: str, source_kind: SourceKind | str, source_name: str,
                status: CheckStatus | str, summary: str, fields: list | None = None, evidence_ids: list | None = None,
                source_url: str | None = None, expires_at: str | None = None, provider_ref: str | None = None,
@@ -447,7 +451,7 @@ def run_providers(biz: dict, case_id: str, ctx: dict, names: set[str] | None = N
             continue
         for r in results:
             kind = SourceKind(r.source_kind)
-            if biz.get("is_fixture") and kind in REGISTRY_LIKE:
+            if biz.get("is_fixture") and kind in REGISTRY_LIKE and pname not in REAL_DATA_CHECKS:
                 kind = SourceKind.simulated_fixture  # a demo business never carries real registry results
             dim = getattr(r, "dim", None) or (list(getattr(p, "dims", [])) or [Dim.identity])[0]
             out.append(_check_doc(
@@ -1213,7 +1217,7 @@ def scenario() -> tuple[list[dict], list[dict]]:
     biz = [
         _fx_business(FX_BUYER, roles=["buyer"], display_name="Sri Lakshmi General Stores", legal_name="Sri Lakshmi General Stores",
                      constitution="Proprietorship", category="Kirana / general store", products=["staples", "rice", "edible oil", "packaged foods"],
-                     gstin=g_b, address={"line": "Shop 4, Main Road (demo address)", "city": "Hyderabad", "state": "Telangana", "pin": "500016"},
+                     gstin=g_b, address={"line": "Plot 12, Prakash Nagar, Begumpet (demo address)", "city": "Hyderabad", "state": "Telangana", "pin": "500016"},
                      geo={"lat": 17.4375, "lng": 78.4483, "accuracy_m": 25, "captured_at": tn.iso(), "consent": True},
                      representative={"name": "Demo Proprietor", "role": "Proprietor", "authority_status": "pending"}),
         _fx_business(FX_ANNAPURNA, display_name="Annapurna Rice Traders", legal_name="Annapurna Rice Traders", constitution="Proprietorship",
