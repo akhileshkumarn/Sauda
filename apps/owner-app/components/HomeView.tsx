@@ -9,6 +9,7 @@ import { NewRestockButton, SessionRow } from './restock/SessionList';
 import { negotiationLabel, orderStatus, sessionLabel } from './status';
 import { Button, Callout, ErrorState, Icon, Money, SectionHead, Skeleton, StatusPill, type Tone } from './ui';
 import { Sheet } from './ui-client';
+import { VerifyEntry } from './network/VerifyEntry';
 
 export function HomeView() {
   const { data, error, loading, reload } = useAsync(() => getOverview(), []);
@@ -64,6 +65,7 @@ function Body({ o, sessions }: { o: Overview; sessions: SessionSummary[] }) {
       )}
       {firstRun && <p className="small muted">Try: “10 atta 5 kg, 20 sunflower oil, keep under ₹8,000”. You check every line before anything happens.</p>}
       <p className="xs muted">You list it · you sign limits · Sauda negotiates · you approve and pay by UPI.</p>
+      <VerifyEntry />
       <PauseCard initial={o.shop?.kill_switch ?? null} />
     </>
   );

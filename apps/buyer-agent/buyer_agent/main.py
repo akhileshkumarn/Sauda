@@ -566,3 +566,5 @@ from .voice_routes import router as voice_router  # noqa: E402  (voice agent: PO
 app.include_router(voice_router)
 from .session_routes import router as session_router  # noqa: E402  (restock sessions: /restock/sessions*)
 app.include_router(session_router)
+from .trust_network_routes import router as tn_router  # noqa: E402  (Trust Network: /tn/*, /review/*)
+app.include_router(tn_router)
