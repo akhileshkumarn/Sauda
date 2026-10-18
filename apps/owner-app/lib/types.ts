@@ -389,3 +389,177 @@ export interface NegotiationView {
   cart?: { total_paise?: Paise; [k: string]: unknown } | null;
   orders?: OverviewOrder[];
 }
+
+// ======================================================================
+// Trust Network (business verification + supplier network). Shapes follow
+// CONTRACT_TN "API" exactly; optional extras are tolerated, never required.
+// ======================================================================
+export type TnRole = 'buyer' | 'seller';
+export type TnDim =
+  | 'identity' | 'registration' | 'address' | 'operational' | 'representative' | 'product_compliance'
+  | 'distribution_authority' | 'trading_references' | 'payment_details' | 'operational_capability';
+export type TnCheckStatus =
+  | 'verified' | 'partially_verified' | 'self_declared' | 'pending' | 'inconclusive' | 'stale' | 'conflict' | 'failed' | 'not_applicable';
+export type TnSourceKind =
+  | 'official_registry' | 'authorised_provider' | 'uploaded_evidence' | 'human_review' | 'self_declared'
+  | 'preliminary_validation' | 'simulated_fixture' | 'device_signal';
+export type TnCategory =
+  | 'identity_confirmed' | 'evidence_reviewed' | 'ready_for_counterparty_review' | 'additional_review_required' | 'verification_unsuccessful';
+export type TnRelState = 'invited' | 'accepted' | 'onboarding' | 'under_review' | 'approved_for_trading' | 'declined' | 'paused';
+export type TnAuthorityStatus = 'unknown' | 'self_declared' | 'pending' | 'verified' | 'rejected';
+
+export interface TnAddress { line: string; city: string; state: string; pin: string }
+export interface TnGeo { lat: number; lng: number; accuracy_m?: number | null; captured_at?: string | null; consent: boolean }
+export interface TnBusiness {
+  bid: string;
+  roles: TnRole[];
+  display_name: string;
+  legal_name?: string | null;
+  constitution?: string | null;
+  category?: string | null;
+  products: string[];
+  gstin?: string | null;
+  udyam?: string | null;
+  fssai?: string | null;
+  cin_llpin?: string | null;
+  address: TnAddress;
+  geo?: TnGeo | null;
+  contact?: { phone_masked?: string | null; email_masked?: string | null };
+  representative: { name: string; role: string; authority_status: TnAuthorityStatus };
+  brand_claims?: string[];
+  owner_uid?: string;
+  members?: string[];
+  is_fixture?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  version: number;
+}
+export interface TnFieldCompare { field: string; declared?: string | null; observed?: string | null; match: boolean | null }
+export interface TnCheck {
+  check_id: string;
+  business_id: string;
+  case_id: string;
+  dim: TnDim;
+  check_type: string;
+  source_kind: TnSourceKind;
+  source_name: string;
+  source_url?: string | null;
+  status: TnCheckStatus;
+  summary: string;
+  fields: TnFieldCompare[];
+  evidence_ids: string[];
+  checked_at: string;
+  expires_at?: string | null;
+  provider_ref?: string | null;
+  available?: boolean;
+  reviewer?: { uid_hash: string; decision: string; reason: string; at: string } | null;
+}
+export interface TnDimensionSummary { dim: TnDim; status: TnCheckStatus; source_kind?: TnSourceKind | null; summary: string; checked_at?: string | null }
+export interface TnSummary {
+  category: TnCategory;
+  category_label?: string;
+  dimensions: TnDimensionSummary[];
+  outstanding: string[];
+  limitations: string[];
+  next_step: string;
+  review_reasons?: string[];
+}
+export interface TnReadiness { tier: string; ready: boolean; missing: string[]; requires_human_review?: boolean; note?: string }
+export type TnBusinessMine = TnBusiness & { summary?: TnSummary | null };
+/** GET /tn/businesses/{bid}: full record for members/reviewers. Checks may arrive alongside. */
+export interface TnBusinessFull { business: TnBusiness; checks: TnCheck[]; summary?: TnSummary | null }
+
+export interface TnCase { case_id: string; bid: string; purpose: string; status: 'open' | 'in_review' | 'completed' }
+export interface TnVerifyResponse { case: TnCase; checks: TnCheck[] }
+export type TnEvidenceType = 'gst_certificate' | 'udyam_certificate' | 'fssai_licence' | 'authorisation_letter' | 'storefront_photo' | 'brand_authorisation' | 'partnership_deed' | 'other';
+export interface TnEvidence { eid: string; bid: string; type: TnEvidenceType | string; mime?: string; size?: number; sha256?: string; guard?: { blocked: boolean; categories?: string[] } }
+export interface TnEvidenceResponse { evidence: TnEvidence; checks: TnCheck[] }
+
+/** GET /tn/businesses/{bid}/profile: the REDACTED counterparty view. No documents, no customer/supplier lists. */
+export interface TnProfile {
+  bid: string;
+  display_name: string;
+  legal_name?: string | null;
+  roles: TnRole[];
+  constitution?: string | null;
+  category?: string | null;
+  products: string[];
+  address: { city?: string; state?: string; pin?: string };
+  representative?: { name?: string; role?: string; authority_status?: TnAuthorityStatus };
+  is_fixture?: boolean;
+  summary: TnSummary;
+  checks?: Pick<TnCheck, 'check_id' | 'dim' | 'source_kind' | 'source_name' | 'status' | 'summary' | 'checked_at'>[];
+  pending_review?: string[];
+  readiness?: TnReadiness[] | Record<string, TnReadiness> | null;
+  outstanding_count?: number;
+  gstin_masked?: string | null;
+}
+
+export interface TnRelationship {
+  rid: string;
+  buyer_bid: string;
+  seller_bid: string;
+  initiated_by_bid: string;
+  state: TnRelState;
+  categories: string[];
+  provenance: 'invitation' | 'self_declared' | 'confirmed_trade' | 'validated_reference';
+  shared_fields?: string[];
+  requirements?: Record<string, unknown>;
+  history?: { state?: string; action?: string; reason?: string; by_bid?: string; at: string }[];
+  // Display extras (optional): names of the two sides and a masked contact for open invitations.
+  buyer_name?: string | null;
+  seller_name?: string | null;
+  buyer_display_name?: string | null;
+  seller_display_name?: string | null;
+  counterparty?: { bid?: string; display_name?: string } | null;
+  contact_masked?: string | null;
+  readiness?: TnReadiness | Record<string, TnReadiness> | null;
+  version?: number;
+  approved_tiers?: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+export interface TnInvitation {
+  iid: string;
+  from_bid: string;
+  role_invited: TnRole;
+  contact_masked: string;
+  status: 'sent' | 'accepted' | 'expired' | 'revoked';
+  expires_at?: string | null;
+  rid?: string | null;
+  categories?: string[];
+  display_name?: string | null;
+  display_name_hint?: string | null;
+  created_at?: string | null;
+}
+/** POST /tn/invitations: the share token is returned ONCE. */
+export interface TnInvitationCreated { invitation: TnInvitation; token: string | null; share_url?: string | null; duplicate?: boolean }
+export interface TnInvitationPublic { from_display_name: string; role_invited: TnRole; status?: string; expires_at?: string | null }
+
+export type TnReviewStatus = 'open' | 'needs_evidence' | 'approved' | 'rejected' | 'escalated';
+export type TnReviewAction = 'approve_identity' | 'approve_claim' | 'reject_claim' | 'request_evidence' | 'escalate';
+export interface TnReviewDecision { action: TnReviewAction | string; scope: string; reason: string; reviewer_hash?: string; at: string }
+export interface TnReviewTask {
+  tid: string;
+  bid: string;
+  case_id: string;
+  reasons: string[];
+  status: TnReviewStatus;
+  decisions: TnReviewDecision[];
+  created_at: string;
+  // Display extras (optional)
+  display_name?: string | null;
+  roles?: TnRole[];
+  is_fixture?: boolean;
+}
+export interface TnReviewTaskDetail {
+  task: TnReviewTask;
+  business?: TnBusiness | null;
+  checks: TnCheck[];
+  summary?: TnSummary | null;
+  audit?: { action: string; reason?: string; actor?: string; at: string }[];
+  recommended_action?: string | null;
+  manual_checks?: { check_id?: string; title: string; source_url: string; fields: string[] }[];
+}
+export interface TnLedgerEvent { seq?: number; type?: string; event_type?: string; ts?: string; at?: string; created_at?: string; payload?: Record<string, unknown>; actor?: string; [k: string]: unknown }
+export interface TnLedger { chain_id: string; events: TnLedgerEvent[]; verification?: { chain_ok?: boolean; ok?: boolean; [k: string]: unknown } | null }

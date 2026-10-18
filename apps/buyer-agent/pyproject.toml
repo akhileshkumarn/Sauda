@@ -2,7 +2,7 @@
 name = "buyer-agent"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["sauda-trust", "sauda-ledger", "sauda-data", "google-adk[a2a]>=2.12", "google-genai>=1.30", "fastapi>=0.115", "uvicorn[standard]>=0.30", "sse-starlette>=2.1", "firebase-admin>=6.5", "qrcode>=7.4", "google-cloud-storage>=2.18", "python-multipart>=0.0.9", "pypng>=0.20220715.0"]
+dependencies = ["sauda-trust", "sauda-ledger", "sauda-data", "sauda-verify", "google-adk[a2a]>=2.12", "google-genai>=1.30", "fastapi>=0.115", "uvicorn[standard]>=0.30", "sse-starlette>=2.1", "firebase-admin>=6.5", "qrcode>=7.4", "google-cloud-storage>=2.18", "python-multipart>=0.0.9", "pypng>=0.20220715.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -14,3 +14,4 @@ packages = ["buyer_agent"]
 sauda-trust = { workspace = true }
 sauda-ledger = { workspace = true }
 sauda-data = { workspace = true }
+sauda-verify = { workspace = true }

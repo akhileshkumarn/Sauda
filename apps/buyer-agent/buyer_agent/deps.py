@@ -43,6 +43,8 @@ class Settings:
     confirmation_ttl_min: int = 15
     demo_pay_amount_paise: int | None = None
     use_model_armor: bool = True
+    reviewer_uids: frozenset = frozenset()  # Trust Network reviewers (REVIEWER_UIDS / REVIEWER_EMAILS, comma separated)
+    reviewer_emails: frozenset = frozenset()
 
 
 @lru_cache(maxsize=1)
@@ -66,6 +68,8 @@ def settings() -> Settings:
         confirmation_ttl_min=int(e("CONFIRMATION_TTL_MIN", "15")),
         demo_pay_amount_paise=int(demo_amt) if demo_amt else None,
         use_model_armor=e("USE_MODEL_ARMOR", "true").lower() != "false",
+        reviewer_uids=frozenset(x.strip() for x in e("REVIEWER_UIDS", "").split(",") if x.strip()),
+        reviewer_emails=frozenset(x.strip().lower() for x in e("REVIEWER_EMAILS", "").split(",") if x.strip()),
     )
 
 

@@ -7,9 +7,11 @@ import { lastNegotiationId } from '@/lib/session';
 import { Icon } from './ui';
 import { ProfileMenu } from './ProfileMenu';
 import { BrandMark } from './BrandMark';
+import { useIsReviewer } from '@/lib/network';
 
 type Tab = { href: string; label: string; icon: string; match: (p: string) => boolean };
 
+const inNetwork = (p: string) => p.startsWith('/network') || p.startsWith('/review');
 const inTrust = (p: string) => p.startsWith('/trust') || p.startsWith('/attack') || p.startsWith('/savings');
 
 export function Nav() {
@@ -21,8 +23,10 @@ export function Nav() {
     { href: '/', label: 'Home', icon: 'home', match: (p) => p === '/' },
     { href: '/restock', label: 'Restock', icon: 'cart', match: (p) => p.startsWith('/restock') || p.startsWith('/mandate') || p.startsWith('/confirm') },
     { href: '/orders', label: 'Orders', icon: 'box', match: (p) => p.startsWith('/orders') || p.startsWith('/pay') },
+    { href: '/network', label: 'Network', icon: 'link', match: inNetwork },
     { href: trustHref, label: 'Trust', icon: 'shield', match: inTrust },
   ];
+  const reviewer = useIsReviewer();
   const sub = [
     { href: trustHref, label: 'Record', match: (p: string) => p.startsWith('/trust') },
     { href: '/attack', label: 'Security tests', match: (p: string) => p.startsWith('/attack') },
@@ -56,7 +60,15 @@ export function Nav() {
           </nav>
         </div>
       )}
-      <nav className="tabbar" aria-label="Main">
+      {reviewer && inNetwork(path) && (
+        <div className="subtabs-wrap">
+          <nav className="subtabs" aria-label="Network">
+            <Link href="/network" aria-current={path.startsWith('/network') ? 'page' : undefined}>My network</Link>
+            <Link href="/review" aria-current={path.startsWith('/review') ? 'page' : undefined}>Review</Link>
+          </nav>
+        </div>
+      )}
+      <nav className="tabbar" aria-label="Main" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
         {tabs.map((t) => (
           <Link key={t.label} href={t.href} aria-current={t.match(path) ? 'page' : undefined}>
             <span className="tab-ico"><Icon name={t.icon} size={22} stroke={1.5} /></span>
