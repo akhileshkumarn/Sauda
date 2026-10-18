@@ -81,10 +81,11 @@ const TIERS: { v: string; label: string }[] = [
   { v: 'credit', label: 'Credit (needs a Sauda reviewer)' },
   { v: 'large_order', label: 'Large orders (needs a Sauda reviewer)' },
 ];
-const LABELS: Record<RelAction, string> = { approve_for_trading: 'Approve for trading', decline: 'Decline', pause: 'Pause', start_review: 'Start review', resume: 'Resume' };
+const LABELS: Record<RelAction, string> = { accept_request: 'Accept request', approve_for_trading: 'Approve for trading', decline: 'Decline', pause: 'Pause', start_review: 'Start review', resume: 'Resume' };
 
 function actionsFor(state: string, seller: boolean): RelAction[] {
   const out: RelAction[] = [];
+  if (seller && state === 'requested') out.push('accept_request');
   if (seller && ['onboarding', 'under_review', 'paused', 'approved_for_trading'].includes(state)) out.push('approve_for_trading');
   if (state === 'onboarding') out.push('start_review');
   if (state === 'paused') out.push('resume');

@@ -10,6 +10,7 @@ import type {
   TnInvitationCreated, TnInvitationPublic, TnProfile, TnReadiness, TnRelationship, TnRelState, TnReviewAction, TnReviewTask,
   TnReviewTaskDetail, TnRole, TnSourceKind, TnSummary, TnVerifyResponse, TnDimensionSummary,
 } from './types';
+import type { TnAreas, TnConnectResponse, TnDiscoverQuery, TnDiscoverResponse, TnListing, TnListingSaved, TnServiceArea } from './types';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -182,7 +183,7 @@ export async function getRelationship(rid: string, bid?: string): Promise<TnRela
   void bid;
   return normRel(await req<TnRelationship>('GET', `/tn/relationships/${encodeURIComponent(rid)}`));
 }
-export type RelAction = 'approve_for_trading' | 'decline' | 'pause' | 'start_review' | 'resume';
+export type RelAction = 'accept_request' | 'approve_for_trading' | 'decline' | 'pause' | 'start_review' | 'resume';
 export async function decideRelationship(rid: string, action: RelAction, reason: string, tier = 'prepaid_small', version?: number): Promise<TnRelationship> {
   if (MOCK) return m(() => mock.mockTnDecision(rid, action, reason, tier), 600);
   const r = await req<TnRelationship | { relationship: TnRelationship }>('POST', `/tn/relationships/${encodeURIComponent(rid)}/decision`, { body: { action, reason, tier, ...(version !== undefined ? { version } : {}) } });
@@ -288,6 +289,7 @@ export const DIM_WORD: Record<TnDim, { label: string; help: string }> = {
 export const dimWord = (d: string) => DIM_WORD[d as TnDim] || { label: d.replace(/_/g, ' '), help: '' };
 
 export const REL_WORD: Record<TnRelState, { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' | 'info' }> = {
+  requested: { label: 'Requested', tone: 'info' },
   invited: { label: 'Invited', tone: 'neutral' },
   accepted: { label: 'Accepted', tone: 'info' },
   onboarding: { label: 'Onboarding', tone: 'info' },
@@ -446,3 +448,42 @@ export function counterpartyOf(r: TnRelationship, myBid: string): { bid: string;
   const name = r.counterparty?.display_name || (iAmBuyer ? r.seller_display_name || r.seller_name : r.buyer_display_name || r.buyer_name) || r.contact_masked || 'Invited business';
   return { bid, name, role };
 }
+
+// ---------------------------------------------------------------- supplier discovery and listings
+
+export const LISTING_CATEGORIES = ['staples', 'rice', 'edible oil', 'packaged foods', 'personal care', 'cleaning', 'dry fruits', 'spices', 'beverages', 'dairy', 'snacks', 'fmcg'];
+export const SORT_NOTE = 'Sorted by delivery area and verification status, not by price or quality';
+
+export async function tnDiscover(q: TnDiscoverQuery): Promise<TnDiscoverResponse> {
+  if (MOCK) return m(() => mock.mockTnDiscover(q), 450);
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+  return req('GET', `/tn/discover?${p.toString()}`);
+}
+export async function tnConnect(body: { from_bid: string; to_bid: string; categories: string[]; message?: string }): Promise<TnConnectResponse> {
+  if (MOCK) return m(() => mock.mockTnConnect(body), 600);
+  return req('POST', '/tn/connect', { body });
+}
+export async function tnPutListing(bid: string, body: { version: number; listed: boolean; categories: string[]; service_area: Pick<TnServiceArea, 'kind' | 'districts' | 'states'>; min_order_paise?: number | null; notes?: string | null }): Promise<TnListingSaved> {
+  if (MOCK) return m(() => mock.mockTnPutListing(bid, body), 500);
+  return req('PUT', `/tn/businesses/${encodeURIComponent(bid)}/listing`, { body });
+}
+let areasCache: TnAreas | null = null;
+export async function tnAreas(): Promise<TnAreas> {
+  if (areasCache) return areasCache;
+  areasCache = MOCK ? await m(() => mock.mockTnAreas(), 150) : await req<TnAreas>('GET', '/tn/areas');
+  return areasCache;
+}
+
+/** "HYDERABAD" -> "Hyderabad"; "ANDHRA PRADESH" -> "Andhra Pradesh". */
+export function titleCase(s?: string | null): string {
+  return (s || '').toLowerCase().replace(/(^|[\s\-(/])([a-z])/g, (_, a: string, b: string) => a + b.toUpperCase()).replace(/\bAnd\b/g, 'and');
+}
+export function areaLabel(a?: Pick<TnServiceArea, 'kind' | 'districts' | 'states'> | null): string {
+  if (!a) return 'Delivery area not set';
+  if (a.kind === 'pan_india') return 'Delivers across India';
+  if (a.kind === 'state') return `Delivers across ${a.states.map(titleCase).join(', ') || 'a state'}`;
+  return `Delivers in ${a.districts.map(titleCase).join(', ') || 'a district'}`;
+}
+export const CONNECTION_WORD: Record<string, string> = { none: 'Request to connect', requested: 'Requested', connected: 'Connected', declined: 'Declined' };
+export const emptyListing = (): TnListing => ({ listed: false, categories: [], service_area: { kind: 'district', districts: [], states: [] }, min_order_paise: null, notes: '' });

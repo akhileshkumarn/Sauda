@@ -126,3 +126,35 @@ This document covers the screens in `apps/owner-app` for business verification a
 
 - "Request manual review" has no dedicated endpoint. It re-posts `/verify` with `consents.manual_review = true`, and review tasks also open automatically when the policy finds review reasons.
 - Signed preview links return 503 locally; the UI shows "Preview unavailable".
+
+## Find suppliers and listings
+
+### Find verified suppliers (`/network/discover`)
+
+- **Entry:** the "Find verified suppliers" row in Network → Grow your network (buyers only).
+- **Controls:** a search box (name or product), category chips (`aria-pressed`), an area selector ("Near me · {District}", "{State}", "All India") and a "Verified only" switch, on by default. The viewer's district and state come from the PIN their buyer business declared.
+- **Ordering note**, always shown: "Sorted by delivery area and verification status, not by price or quality."
+- **Result card:** name, city and state, where the supplier says it delivers (always marked "self-declared"), categories, the verification category in plain words, a dot per check (business identity, registration, address, shop or warehouse, person acting for the business, brand authorisation when claimed), the source badges, the minimum order and "Checked … ago". A demo business carries a dashed card border and the purple "Simulated (demo data)" badge, and its category text ends with "(simulated demo data)".
+- **Request to connect:** a sheet (`role="dialog"`, Escape closes it) where the buyer picks categories and may add a message of up to 300 characters. It states what gets shared: the redacted trust profile only (name, city and state, verification category, per-check status), never GSTIN, phone, email, street address or documents. After sending, the card button becomes "Requested"; it shows "Connected" (a link to the relationship) or "Declined" when that is the state.
+- **States:**
+  - loading: three skeleton cards;
+  - empty: "No verified suppliers deliver to {district} yet. Try your state or All India, or invite a supplier you already buy from", with buttons for the wider areas and "Invite a supplier";
+  - error: message and "Try again";
+  - `buyer_profile_required`: "Verify your business first" with a "Verify my business first" button to onboarding.
+- No card ever shows a GSTIN, contact, street address or customer names; the card is built only from what the supplier chose to list plus check statuses.
+
+### Supplier listing (business page, sellers only)
+
+- Section "Listing in Find suppliers" on `/network/business/{bid}`, rendered only when the business has the seller role (`components/network/Listing.tsx`).
+- A switch "List my business in Find suppliers", category chips, the delivery area (specific districts, whole state or all India; state and district names come from the India Post PIN directory), a minimum order in rupees and a note of up to 200 characters.
+- A live preview shows the exact card buyers will see, using the same component as the search results. Saving uses the business version, so an edit elsewhere produces a clear "reload" message instead of overwriting.
+
+### Incoming requests (Network home, sellers)
+
+- An "Incoming requests · n" group lists buyers who asked to connect, with their categories and their message, labelled "Their message (unverified)". A message held back by the safety check is not shown.
+- Accept and Decline each open an inline reason field (at least 3 characters). Accepting starts onboarding; approving trading is still a separate decision on the relationship page, and credit or large orders still need a reviewer.
+- Buyers see their own outgoing requests in a "Requests sent" group.
+
+### Mock mode
+
+`NEXT_PUBLIC_MOCK=1` serves the screens from `lib/mock.ts`. Query flags: `?mock=seller` (signed in as the Annapurna fixture, with one incoming request), `?mock=none` (no results), `?mock=nobuyer` (buyer profile required) and `?mock=error`.

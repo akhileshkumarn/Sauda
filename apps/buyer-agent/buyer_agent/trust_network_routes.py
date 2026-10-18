@@ -920,6 +920,7 @@ def revoke_invitation(iid: str, v: Viewer = Depends(viewer)):
 
 # ---------------------------------------------------------------- relationships
 TRANSITIONS: dict[str, set[str]] = {
+    "requested": {"accepted", "declined"},  # discovery request: only the seller accepts or declines
     "invited": {"accepted", "declined"},
     "accepted": {"onboarding", "declined", "paused"},
     "onboarding": {"under_review", "declined", "paused"},
@@ -964,7 +965,7 @@ def get_relationship(rid: str, v: Viewer = Depends(viewer)):
 
 
 class RelDecisionIn(BaseModel):
-    action: Literal["approve_for_trading", "decline", "pause", "start_review", "resume"]
+    action: Literal["approve_for_trading", "decline", "pause", "start_review", "resume", "accept_request"]
     reason: str = Field(min_length=3, max_length=500)
     tier: str = "prepaid_small"
     version: int | None = None
@@ -981,8 +982,16 @@ def relationship_decision(rid: str, body: RelDecisionIn, v: Viewer = Depends(vie
         return _err(409, "version_conflict", "This relationship changed elsewhere; reload it.", current=r)
     state = r["state"]
     target = {"approve_for_trading": "approved_for_trading", "decline": "declined", "pause": "paused",
-              "start_review": "under_review", "resume": "under_review"}[body.action]
+              "start_review": "under_review", "resume": "under_review", "accept_request": "onboarding"}[body.action]
     path = [target]
+    if state == RelState.requested.value and r["seller_bid"] not in mine:
+        return _err(403, "not_approver", "Only the seller accepts or declines a connection request.")
+    if body.action == "accept_request":
+        if r["seller_bid"] not in mine:
+            return _err(403, "not_approver", "Only the seller accepts a connection request.")
+        if state in ("accepted", "onboarding"):
+            return {"relationship": r, "idempotent": True}
+        path = ["accepted", "onboarding"]
     if body.action == "approve_for_trading":
         if r["seller_bid"] not in mine:
             return _err(403, "not_approver", "Only the seller decides whether to trade with this buyer.")
@@ -1166,7 +1175,28 @@ FX_BUYER = "fx_buyer_srilakshmi"
 FX_ANNAPURNA = "fx_seller_annapurna"
 FX_DECCAN = "fx_seller_deccan"
 FX_METRO = "fx_seller_metro"
-FX_UIDS = {FX_BUYER: "fx-user-srilakshmi", FX_ANNAPURNA: "fx-user-annapurna", FX_DECCAN: "fx-user-deccan", FX_METRO: "fx-user-metro"}
+FX_PUNE = "fx_seller_pune_dryfruits"
+FX_BLR = "fx_seller_blr_homecare"
+FX_UIDS = {FX_BUYER: "fx-user-srilakshmi", FX_ANNAPURNA: "fx-user-annapurna", FX_DECCAN: "fx-user-deccan", FX_METRO: "fx-user-metro",
+           FX_PUNE: "fx-user-pune", FX_BLR: "fx-user-blr"}
+
+
+def _fx_listing(categories: list[str], kind: str, districts: list[str] = (), states: list[str] = (), min_rupees: int | None = None,
+                notes: str | None = None) -> dict:
+    return {"listed": True, "categories": categories,
+            "service_area": {"kind": kind, "districts": list(districts), "states": list(states), "basis": "self_declared"},
+            "min_order_paise": min_rupees * 100 if min_rupees else None, "notes": notes, "updated_at": tn.iso()}
+
+
+# Simulated sellers listed in Find suppliers (the service areas are self-declared demo values).
+FX_LISTINGS = {
+    FX_ANNAPURNA: _fx_listing(["staples", "rice"], "district", ["HYDERABAD"], ["TELANGANA"], 5000, "Simulated demo listing."),
+    FX_DECCAN: _fx_listing(["edible oil"], "state", [], ["TELANGANA"], 10000, "Simulated demo listing."),
+    FX_METRO: _fx_listing(["fmcg", "staples", "packaged foods", "personal care"], "pan_india", min_rupees=15000,
+                          notes="Simulated demo listing."),
+    FX_PUNE: _fx_listing(["dry fruits", "spices"], "district", ["PUNE"], ["MAHARASHTRA"], 3000, "Simulated demo listing."),
+    FX_BLR: _fx_listing(["cleaning", "personal care"], "state", [], ["KARNATAKA"], 4000, "Simulated demo listing."),
+}
 SIM = "Simulated GST registry (demo fixture)"
 SIM_NOTE = " (simulated demo data, not a real registry result)"
 
@@ -1196,7 +1226,7 @@ def _fx_checks(bid: str, rows: list[tuple]) -> list[dict]:
     return out
 
 
-def _fx_common(bid: str, gstin: str, name: str, pin: str) -> list[tuple]:
+def _fx_common(bid: str, gstin: str, name: str, pin: str, city: str = "Hyderabad") -> list[tuple]:
     from sauda_verify.models import FieldCompare as F
 
     return [
@@ -1204,7 +1234,7 @@ def _fx_common(bid: str, gstin: str, name: str, pin: str) -> list[tuple]:
          {"check_type": "gstin_format", "fields": [F(field="gstin", declared=gstin, observed=gstin, match=True).model_dump()]}),
         ("registration", "simulated_fixture", "verified", "GST registration shows Active, regular taxpayer",
          {"check_type": "gst_registry", "observed": {"registration_status": "Active", "taxpayer_type": "Regular"}}),
-        ("address", "simulated_fixture", "partially_verified", f"Principal place of business is in Hyderabad, PIN {pin}",
+        ("address", "simulated_fixture", "partially_verified", f"Principal place of business is in {city}, PIN {pin}",
          {"check_type": "gst_address", "fields": [F(field="pin", declared=pin, observed=pin, match=True).model_dump()]}),
         ("operational", "simulated_fixture", "verified", "Return filing is regular for the last 12 months", {"check_type": "gst_filing"}),
     ]
@@ -1214,6 +1244,7 @@ def scenario() -> tuple[list[dict], list[dict]]:
     from sauda_verify.models import FieldCompare as F
 
     g_b, g_a, g_d, g_m = "36ZZLPS0001S1Z9", "36ZZAPA0002A1Z2", "36ZZDFD0003D1ZA", "36ZZMCM0004M1ZE"
+    g_p, g_k = "27ZZPDF0005P1Z8", "29ZZBHC0006B1Z5"
     biz = [
         _fx_business(FX_BUYER, roles=["buyer"], display_name="Sri Lakshmi General Stores", legal_name="Sri Lakshmi General Stores",
                      constitution="Proprietorship", category="Kirana / general store", products=["staples", "rice", "edible oil", "packaged foods"],
@@ -1231,7 +1262,17 @@ def scenario() -> tuple[list[dict], list[dict]]:
                      category="FMCG distributor", products=["staples", "packaged foods", "personal care"], gstin=g_m, linked_supplier_id="metro",
                      address={"line": "Warehouse 7 (demo address)", "city": "Hyderabad", "state": "Telangana", "pin": "500037"},
                      representative={"name": "Demo Manager", "role": "Sales manager", "authority_status": "self_declared"}),
+        _fx_business(FX_PUNE, display_name="Pune Dry Fruits & Spices Co.", legal_name="Pune Dry Fruits & Spices Co.", constitution="Partnership",
+                     category="Dry fruits and spices wholesaler", products=["dry fruits", "spices"], gstin=g_p,
+                     address={"line": "Shop 4, Market Yard (demo address)", "city": "Pune", "state": "Maharashtra", "pin": "411002"},
+                     representative={"name": "Demo Partner", "role": "Partner", "authority_status": "self_declared"}),
+        _fx_business(FX_BLR, display_name="Bengaluru Home Care Supplies", legal_name="Bengaluru Home Care Supplies", constitution="Proprietorship",
+                     category="Cleaning and home care distributor", products=["cleaning", "personal care"], gstin=g_k,
+                     address={"line": "Unit 9, Industrial Layout (demo address)", "city": "Bengaluru", "state": "Karnataka", "pin": "560068"}),
     ]
+    for b in biz:
+        if b["bid"] in FX_LISTINGS:
+            b["listing"] = dict(FX_LISTINGS[b["bid"]])
     checks: list[dict] = []
     checks += _fx_checks(FX_BUYER, _fx_common(FX_BUYER, g_b, "Sri Lakshmi General Stores", "500016") + [
         ("identity", "simulated_fixture", "partially_verified",
@@ -1244,9 +1285,12 @@ def scenario() -> tuple[list[dict], list[dict]]:
         ("representative", "self_declared", "pending", "Proprietor is self-declared; authority to act for the business has not been shown yet.",
          {"check_type": "representative_declaration"}),
     ])
-    for bid, g, name, pin in ((FX_ANNAPURNA, g_a, "Annapurna Rice Traders", "500012"), (FX_DECCAN, g_d, "Deccan Edible Oils", "500018"),
-                              (FX_METRO, g_m, "Metro Distributors Private Limited", "500037")):
-        rows = _fx_common(bid, g, name, pin) + [
+    for bid, g, name, pin, city in ((FX_ANNAPURNA, g_a, "Annapurna Rice Traders", "500012", "Hyderabad"),
+                                    (FX_DECCAN, g_d, "Deccan Edible Oils", "500018", "Hyderabad"),
+                                    (FX_METRO, g_m, "Metro Distributors Private Limited", "500037", "Hyderabad"),
+                                    (FX_PUNE, g_p, "Pune Dry Fruits & Spices Co.", "411002", "Pune"),
+                                    (FX_BLR, g_k, "Bengaluru Home Care Supplies", "560068", "Bengaluru")):
+        rows = _fx_common(bid, g, name, pin, city) + [
             ("identity", "simulated_fixture", "verified", f"GST legal name matches '{name}'",
              {"check_type": "gst_name_match", "fields": [F(field="legal_name", declared=name, observed=name, match=True).model_dump()]}),
             ("representative", "self_declared", "pending", "Representative is self-declared; authority not yet shown.",
@@ -1281,10 +1325,15 @@ def seed(reset: bool = False) -> dict:
     removed = _fx_reset() if reset else 0
     biz, checks = scenario()
     created = {"businesses": 0, "checks": 0, "reviews": 0, "relationships": 0}
+    listings_added = 0
     for b in biz:
         if tn.create(tn.BUSINESSES, b["bid"], b):
             created["businesses"] += 1
             ledger(b["bid"], "tn.fixture.seeded", "operator", {"bid": b["bid"], "is_fixture": True, "label": "simulated demo business"})
+        elif b.get("listing") and not (tn.business(b["bid"]) or {}).get("listing"):
+            # fixtures seeded before listings existed get their simulated listing once; later edits are kept
+            tn.mutate(tn.BUSINESSES, b["bid"], lambda d, lst=b["listing"]: {**d, "listing": lst} if d.get("is_fixture") else d)
+            listings_added += 1
         tn.create(tn.CASES, f"case_{b['bid']}_seed", {"case_id": f"case_{b['bid']}_seed", "bid": b["bid"], "purpose": "general",
                                                       "status": "open", "is_fixture": True, "created_at": tn.iso()})
     for c in checks:
@@ -1307,5 +1356,8 @@ def seed(reset: bool = False) -> dict:
         "is_fixture": True, "created_at": now, "updated_at": now, "version": 1}):
         created["relationships"] += 1
     return {"ok": True, "is_fixture": True, "label": "Simulated demo scenario. No real registry data.", "removed": removed,
-            "created": created, "businesses": {b["bid"]: b["display_name"] for b in biz},
+            "created": created, "listings_added": listings_added, "businesses": {b["bid"]: b["display_name"] for b in biz},
             "fixture_users": FX_UIDS, "note": "Act as a fixture user with the operator token and header X-Act-As: <fixture uid>."}
+
+
+from . import trust_network_discovery  # noqa: E402,F401  (registers /tn/discover, /tn/connect, listing routes on this router)

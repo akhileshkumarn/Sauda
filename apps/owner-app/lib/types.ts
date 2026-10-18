@@ -405,7 +405,7 @@ export type TnSourceKind =
   | 'preliminary_validation' | 'simulated_fixture' | 'device_signal';
 export type TnCategory =
   | 'identity_confirmed' | 'evidence_reviewed' | 'ready_for_counterparty_review' | 'additional_review_required' | 'verification_unsuccessful';
-export type TnRelState = 'invited' | 'accepted' | 'onboarding' | 'under_review' | 'approved_for_trading' | 'declined' | 'paused';
+export type TnRelState = 'requested' | 'invited' | 'accepted' | 'onboarding' | 'under_review' | 'approved_for_trading' | 'declined' | 'paused';
 export type TnAuthorityStatus = 'unknown' | 'self_declared' | 'pending' | 'verified' | 'rejected';
 
 export interface TnAddress { line: string; city: string; state: string; pin: string }
@@ -502,7 +502,8 @@ export interface TnRelationship {
   initiated_by_bid: string;
   state: TnRelState;
   categories: string[];
-  provenance: 'invitation' | 'self_declared' | 'confirmed_trade' | 'validated_reference';
+  provenance: 'invitation' | 'self_declared' | 'confirmed_trade' | 'validated_reference' | 'discovery_request';
+  request?: TnConnectRequest | null;
   shared_fields?: string[];
   requirements?: Record<string, unknown>;
   history?: { state?: string; action?: string; reason?: string; by_bid?: string; at: string }[];
@@ -563,3 +564,53 @@ export interface TnReviewTaskDetail {
 }
 export interface TnLedgerEvent { seq?: number; type?: string; event_type?: string; ts?: string; at?: string; created_at?: string; payload?: Record<string, unknown>; actor?: string; [k: string]: unknown }
 export interface TnLedger { chain_id: string; events: TnLedgerEvent[]; verification?: { chain_ok?: boolean; ok?: boolean; [k: string]: unknown } | null }
+
+// ---------------------------------------------------------------- supplier discovery and listings
+export type TnAreaKind = 'district' | 'state' | 'pan_india';
+export interface TnServiceArea { kind: TnAreaKind; districts: string[]; states: string[]; basis?: 'self_declared'; label?: string }
+export interface TnListing {
+  listed: boolean;
+  categories: string[];
+  service_area: TnServiceArea;
+  min_order_paise?: number | null;
+  notes?: string | null;
+  updated_at?: string | null;
+}
+export type TnConnection = 'none' | 'requested' | 'connected' | 'declined';
+export interface TnCardDim { dim: TnDim | string; label?: string; status: TnCheckStatus | string; source_kind?: TnSourceKind | string | null }
+export interface TnDiscoverCard {
+  bid: string;
+  display_name: string;
+  city?: string | null;
+  district?: string | null;
+  state?: string | null;
+  categories: string[];
+  service_area: TnServiceArea;
+  min_order_paise?: number | null;
+  notes?: string | null;
+  delivers_to_viewer?: boolean;
+  trust: { category: TnCategory | string; category_text: string; dims: TnCardDim[] };
+  last_checked_at?: string | null;
+  is_fixture: boolean;
+  fixture_label?: string | null;
+  connection: TnConnection;
+  rid?: string | null;
+}
+export type TnDiscoverScope = 'district' | 'state' | 'india';
+export interface TnDiscoverQuery { bid?: string; q?: string; category?: string; scope?: TnDiscoverScope; district?: string; state?: string; verified_only?: boolean; limit?: number; cursor?: string | null }
+export interface TnDiscoverResponse {
+  viewer: { bid: string; display_name?: string; district?: string | null; state?: string | null; pin?: string | null };
+  scope: TnDiscoverScope;
+  area: { district?: string | null; state?: string | null };
+  verified_only: boolean;
+  results: TnDiscoverCard[];
+  next_cursor: string | null;
+  sort_note: string;
+  total?: number;
+}
+export interface TnAreas { states: { state: string; districts: string[] }[]; source?: string }
+export interface TnConnectRequest { message?: string | null; message_blocked?: boolean; categories?: string[]; at?: string }
+export interface TnConnectResponse { relationship: TnRelationship; duplicate: boolean; guard?: { blocked: boolean; categories?: string[] } }
+export interface TnListingSaved { business: TnBusiness & { listing?: TnListing | null }; card?: TnDiscoverCard | null }
+// The seller's opt-in directory listing (declaration merge keeps the base interface untouched).
+export interface TnBusiness { listing?: TnListing | null }
