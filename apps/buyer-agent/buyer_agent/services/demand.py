@@ -250,7 +250,7 @@ def _refs():
 
 
 def _brief(p: dict) -> dict:
-    return {"gtin": str(p.get("gtin")), "name": p.get("name"), "brand": p.get("brand"), "pack_size": p.get("pack_size")}
+    return {"gtin": str(p.get("gtin")), "name": display_name(p), "brand": p.get("brand"), "pack_size": p.get("pack_size")}
 
 
 def build_draft(shop_id: str, request_text: str, festival: str | None = None) -> dict:
@@ -305,7 +305,7 @@ def draft_line(rl: ReqLine, prods: dict[str, dict], today: date | None = None, q
     reason = (f"You asked for {owner_qty}." if owner_qty else
               f"No quantity given; default {qty} (edit it).")
     line = {
-        "gtin": rl.gtin, "name": p.get("name"), "brand": p.get("brand"), "pack_size": p.get("pack_size"),
+        "gtin": rl.gtin, "name": display_name(p), "brand": p.get("brand"), "pack_size": p.get("pack_size"),
         "category": p.get("category"), "qty": qty, "qty_source": qty_source or ("owner" if owner_qty else "inferred"),
         "requested_qty": owner_qty, "suggested_qty": suggested, "suggestion_reason": suggestion_reason,
         "forecast_qty": qty, "uplift_factor": factor, "last_paid_paise": None, "mrp_paise": p.get("mrp_paise"),
@@ -442,3 +442,11 @@ def validate_intent(b: dict, supplier_exists=None) -> None:
         raise MandateInvalid("expires_at must be in the future")
     if exp > now + MAX_EXPIRY + timedelta(minutes=5):
         raise MandateInvalid("expires_at must be at most 7 days from now")
+
+def display_name(p: dict) -> str:
+    """Catalogue name with the brand in front when the name lacks it ("Salt LITE" -> "Tata Salt LITE")."""
+    name = (p.get("name") or "").strip()
+    brand = (p.get("brand") or "").strip()
+    if brand and brand.lower() not in name.lower():
+        return f"{brand.title() if (brand.isupper() or brand.islower()) else brand} {name}".strip()
+    return name

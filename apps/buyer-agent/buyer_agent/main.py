@@ -1,6 +1,7 @@
 """Sauda buyer-agent service (S2): FastAPI routes per SPEC appendix API contracts."""
 from __future__ import annotations
 
+from .services.demand import display_name as _display_name
 import asyncio
 import json
 import logging
@@ -498,7 +499,7 @@ def products(q: str = Query("", max_length=100), limit: int = Query(20, ge=1, le
         if words and not all(w in hay for w in words):
             continue
         c = demand._ceiling({**p, "gtin": g})
-        out.append({"gtin": g, "name": p.get("name"), "brand": p.get("brand"), "pack_size": p.get("pack_size"),
+        out.append({"gtin": g, "name": _display_name(p), "brand": p.get("brand"), "pack_size": p.get("pack_size"),
                     "category": p.get("category"), "mrp_paise": p.get("mrp_paise"), "ceiling_paise": int(c["ceiling_paise"]),
                     "ceiling_source": c.get("ceiling_source"), "ceiling_as_of": c.get("as_of") or ""})
         if len(out) >= limit:

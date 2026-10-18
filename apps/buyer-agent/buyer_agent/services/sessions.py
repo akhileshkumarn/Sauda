@@ -741,29 +741,34 @@ def answer(kind: str | None, d: dict) -> str:
     return f"Current total: up to {_rupees(est)} at your price limits for {_n_items(len(lines))}.{tail}"
 
 
-def build_reply(applied: list[dict], d: dict, clar: dict | None, unmatched: list[str]) -> str:
+def build_reply(applied: list[dict], d: dict, clar: dict | None, unmatched: list[str], lang: str | None = None) -> str:
+    from ..reply_i18n import t as _t
+    L = _t(lang)
+    def J(xs: list[str]) -> str:
+        return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + L["and"] + xs[-1]
     parts = []
     adds = [a for a in applied if a["op"] == "add_line"]
     if adds:
-        parts.append("Added " + _join([f"{a['qty']} {a['name']}" + (" (default qty, edit it)" if a.get("qty_source") == "inferred" else "")
-                                       for a in adds]))
+        parts.append(L["added"].format(items=J([f"{a['qty']} {a['name']}" + (" " + L["dq"] if a.get("qty_source") == "inferred" else "")
+                                                for a in adds])))
     for a in applied:
         if a["op"] == "set_qty":
-            parts.append(f"{a['name']} now {a['qty']}")
+            parts.append(L["set"].format(name=a["name"], qty=a["qty"]))
         elif a["op"] == "remove":
-            parts.append(f"Removed {a['name']}")
+            parts.append(L["remove"].format(name=a["name"]))
         elif a["op"] == "confirm_line":
-            parts.append(f"Keeping {a['name']}")
+            parts.append(L["keep"].format(name=a["name"]))
         elif a["op"] == "replace_product":
-            parts.append(f"Switched to {a['name']}")
+            parts.append(L["switch"].format(name=a["name"]))
         elif a["op"] == "set_budget":
-            parts.append(f"Budget set to {_rupees(a['paise'])}")
+            parts.append(L["budget"].format(amt=_rupees(a["paise"])))
     out = "; ".join(parts)
     if applied:
         est = int(d.get("budget_estimate_paise") or 0)
-        out += f". Total up to {_rupees(est)} for {_n_items(len(d.get('lines') or []))}."
+        n = len(d.get("lines") or [])
+        out += ". " + L["total"].format(amt=_rupees(est), n=n, items_word=L["item"] if n == 1 else L["items"]) + "."
     if unmatched:
-        out += f" I could not match: {_join(unmatched[:3])}."
+        out += " " + L["nomatch"].format(items=J(unmatched[:3])) + "."
     if clar:
         out += (" " if out else "") + clar["question"]
     return out.strip() or "I didn't catch an item or a change. Try e.g. \"add 10 atta\" or \"remove the salt\"."
@@ -861,7 +866,7 @@ def turn(sid: str, uid: str, client_turn_id: str, text: str, source: str, lang: 
         elif reply_override:
             reply = reply_override[1]
         else:
-            reply = build_reply(applied, d, clar, unmatched)
+            reply = build_reply(applied, d, clar, unmatched, lang)
         t2 = _now_ms()
         latency = {"extract": round(t1 - tl), "apply": round(t2 - t1), "total": round(t2 - t0), "load": round(tl - t0)}
         ts = store.iso()

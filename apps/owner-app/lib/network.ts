@@ -3,7 +3,7 @@
 // Builds against CONTRACT_TN (API section). NEXT_PUBLIC_MOCK=1 serves fixtures from ./mock.
 import { useEffect, useState } from 'react';
 import { API_BASE, ApiError, MOCK } from './api';
-import { getIdToken } from './auth';
+import { getIdToken, onUser } from './auth';
 import * as mock from './mock';
 import type {
   TnBusiness, TnBusinessFull, TnEvidence, TnInvitation, TnLedger, TnBusinessMine, TnCategory, TnCheck, TnCheckStatus, TnDim, TnEvidenceResponse, TnEvidenceType,
@@ -221,11 +221,16 @@ export function useReviewerMode(): ReviewerMode {
   useEffect(() => {
     if (reviewerCache !== null) { setMode(reviewerCache); return; }
     let live = true;
-    (async () => {
+    let unsub: (() => void) | undefined;
+    const load = async () => {
       try { reviewerCache = await reviewMe(); } catch { reviewerCache = { reviewer: false, demo: true }; }
       if (live) setMode(reviewerCache);
-    })();
-    return () => { live = false; };
+    };
+    if (MOCK) { load(); return () => { live = false; }; }
+    // Only ask once someone is signed in; a signed-out visitor never triggers a 401.
+    onUser((u) => { if (u && live && reviewerCache === null) load(); })
+      .then((u) => { unsub = u; if (!live) unsub?.(); }).catch(() => {});
+    return () => { live = false; unsub?.(); };
   }, []);
   return mode;
 }

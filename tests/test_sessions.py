@@ -109,17 +109,17 @@ def test_add_set_remove_budget_across_turns(offline):
                           "and twelve one-litre sunflower oils.")
     assert r.status_code == 200, r.text
     b = r.json()
-    assert lines(b["session"]) == {"Aashirvaad Superior MP Atta": 10, "iodized salt": 20, "Refined Sunflower Oil": 12}
+    assert lines(b["session"]) == {"Aashirvaad Superior MP Atta": 10, "Aashirvaad iodized salt": 20, "Hello Life Refined Sunflower Oil": 12}
     assert b["fast_path"] is False and set(b["latency_ms"]) >= {"extract", "apply", "total"}
     assert [o["op"] for o in b["ops"]] == ["add_line"] * 3
     r = say(offline, sid, "Keep the budget below eight thousand rupees.").json()
     assert r["fast_path"] is True and r["session"]["draft"]["stated_budget_paise"] == 800000
     assert r["ops"] == [{"op": "set_budget", "paise": 800000}]
     r = say(offline, sid, "Reduce the oil to eight bottles.").json()
-    assert r["fast_path"] is True and lines(r["session"])["Refined Sunflower Oil"] == 8
+    assert r["fast_path"] is True and lines(r["session"])["Hello Life Refined Sunflower Oil"] == 8
     assert r["ops"][0]["op"] == "set_qty" and r["ops"][0]["qty"] == 8 and r["ops"][0]["from"] == 12
     r = say(offline, sid, "add another 4").json()  # "another" refers to the line touched last (the oil)
-    assert r["fast_path"] is True and lines(r["session"])["Refined Sunflower Oil"] == 12
+    assert r["fast_path"] is True and lines(r["session"])["Hello Life Refined Sunflower Oil"] == 12
     r = say(offline, sid, "Remove the salt.").json()
     assert r["fast_path"] is True and "iodized salt" not in lines(r["session"])
     r = say(offline, sid, "What's my current total?").json()
@@ -138,11 +138,11 @@ def test_ambiguous_reference_gets_one_clarification(offline):
     before = store._get("restock_sessions", sid)["draft"]
     r = say(offline, sid, "remove the oil").json()
     assert r["clarification"] and len(r["clarification"]["options"]) >= 2
-    assert {o["name"] for o in r["clarification"]["options"]} >= {"Refined Sunflower Oil", "Patanjali Kacchi Ghani Mustard Oil"}
+    assert {o["name"] for o in r["clarification"]["options"]} >= {"Hello Life Refined Sunflower Oil", "Patanjali Kacchi Ghani Mustard Oil"}
     assert r["ops"] == [] and r["session"]["draft"]["lines"] == before["lines"]
     assert r["reply"].startswith("Which one") and r["session"]["needs_attention"] is True
     r = say(offline, sid, "the mustard one").json()  # the answer resolves the pending op
-    assert set(lines(r["session"])) == {"Refined Sunflower Oil"} and r["session"]["pending"] is None
+    assert set(lines(r["session"])) == {"Hello Life Refined Sunflower Oil"} and r["session"]["pending"] is None
 
 
 def test_duplicate_client_turn_id_not_applied_twice(offline):
@@ -187,7 +187,7 @@ def test_model_path_numbers_come_from_code(env, monkeypatch):
     sid = new(env)["sid"]
     r = say(env, sid, "Add twenty-four packets of Maggi noodles").json()
     d = r["session"]["draft"]
-    assert lines(r["session"]) == {"Chicken Noodles": 24} and d["stated_budget_paise"] is None
+    assert lines(r["session"]) == {"Maggi Chicken Noodles": 24} and d["stated_budget_paise"] is None
     est = 24 * 2000
     assert d["budget_estimate_paise"] == est and "₹480" in r["reply"]
     nums = set(re.findall(r"\d[\d,]*", r["reply"]))
@@ -197,7 +197,7 @@ def test_model_path_numbers_come_from_code(env, monkeypatch):
 def test_model_failure_uses_shared_parser(offline):
     sid = new(offline)["sid"]
     r = say(offline, sid, "das packet Aashirvaad atta 1 kilo aur bees Tata namak").json()
-    assert lines(r["session"]) == {"Aashirvaad Superior MP Atta": 10, "Salt LITE": 20}
+    assert lines(r["session"]) == {"Aashirvaad Superior MP Atta": 10, "Tata Salt LITE": 20}
 
 
 def test_turn_cap_trims_oldest(offline, monkeypatch):

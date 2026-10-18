@@ -96,3 +96,21 @@ def test_indic_digits_become_ascii():
     assert languages.ascii_digits("১০ প্যাকেট, ௨௦ உப்பு, ੧੨ ਤੇਲ, ۱۲ تیل, १०") == "10 প্যাকেট, 20 உப்பு, 12 ਤੇਲ, 12 تیل, 10"
     assert languages.ascii_digits("10 packets") == "10 packets"
     assert sessions.words_to_digits("১০ প্যাকেট আটা").startswith("10 ")
+
+
+def test_restock_reply_in_owner_language():
+    from buyer_agent.reply_i18n import T
+    from buyer_agent.services.sessions import build_reply
+    from buyer_agent.languages import CODES
+    assert set(CODES) <= set(T)
+    keys = set(T["en"])
+    for code, row in T.items():
+        assert set(row) == keys, code
+    d = {"lines": [{"gtin": "1"}, {"gtin": "2"}], "budget_estimate_paise": 250000}
+    applied = [{"op": "add_line", "qty": 10, "name": "Aashirvaad Atta"}, {"op": "set_qty", "qty": 8, "name": "Oil"}]
+    en = build_reply(applied, d, None, [])
+    assert en.startswith("Added 10 Aashirvaad Atta") and "Total up to" in en
+    ta = build_reply(applied, d, None, [], "ta-IN")
+    assert "சேர்த்தேன்" in ta and "Aashirvaad Atta" in ta and "Added" not in ta
+    assert "जोड़ दिए" in build_reply(applied, d, None, [], "hi")
+    assert build_reply(applied, d, None, [], "xx") == en
